@@ -10,6 +10,10 @@ export interface ScoredProduct {
   source: string
   link: string
   score: number
+  /** True when Serper/Groq returned an actual rating (not defaulted) */
+  rating_verified?: boolean
+  /** Raw signal from Serper — false means rating was missing in API response */
+  has_real_rating?: boolean
 }
 
 export interface Recommendation extends ScoredProduct {

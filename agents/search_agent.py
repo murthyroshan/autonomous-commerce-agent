@@ -4,6 +4,12 @@ agents/search_agent.py — product search with 3-tier fallback.
 Tier 1: Serper.dev Google Shopping API (live, structured)
 Tier 2: Groq Compound model (web search, LLM-parsed)
 Tier 3: Mock data (never fails)
+
+Data quality layer (applied to Serper results):
+- Price sanity validation per category
+- Honest rating/review-count handling (no fake defaults)
+- Irrelevant accessory filtering
+- Duplicate deduplication (keep cheapest)
 """
 
 import os
@@ -16,7 +22,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
 from groq import Groq
 
 from .state import AgentState
-from .mock_data import get_mock_products
+from .mock_data import get_mock_products, CATEGORY_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +98,134 @@ def _extract_budget(query: str) -> float | None:
     return None
 
 
+# ── Category detection ────────────────────────────────────────────────────────
+
+def _detect_category(query: str) -> str:
+    """Return the category key that best matches the query."""
+    q = query.lower()
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        if any(kw in q for kw in keywords):
+            return category
+    return "default"
+
+
+# ── Price sanity validation ───────────────────────────────────────────────────
+
+PRICE_SANITY: dict[str, dict[str, float]] = {
+    "laptop":     {"min": 8000,    "max": 500000},
+    "phone":      {"min": 3000,    "max": 200000},
+    "tv":         {"min": 8000,    "max": 500000},
+    "headphones": {"min": 200,     "max": 80000},
+    "earbuds":    {"min": 200,     "max": 30000},
+    "speaker":    {"min": 300,     "max": 50000},
+    "watch":      {"min": 500,     "max": 100000},
+    "tablet":     {"min": 5000,    "max": 200000},
+    "keyboard":   {"min": 200,     "max": 30000},
+    "mouse":      {"min": 150,     "max": 20000},
+    "camera":     {"min": 3000,    "max": 500000},
+    "default":    {"min": 100,     "max": 1000000},
+}
+
+
+def _is_price_sane(price: float, category: str, budget: float | None) -> bool:
+    """
+    Return False if price is clearly fake or impossible.
+    Checks both category floor/ceiling and budget constraint.
+    """
+    bounds = PRICE_SANITY.get(category, PRICE_SANITY["default"])
+    if price < bounds["min"]:
+        return False
+    if price > bounds["max"]:
+        return False
+    if budget and price > budget:
+        return False
+    return True
+
+
+# ── Rating / review-count validators ─────────────────────────────────────────
+
+def _validate_rating(raw) -> float:
+    """
+    Return the actual rating if present and valid.
+    Returns 0.0 if missing — signals unverified to the scorer.
+    """
+    if raw is None:
+        return 0.0
+    try:
+        r = float(str(raw).strip())
+        if 0.0 <= r <= 5.0:
+            return r
+        return 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _validate_review_count(raw) -> int:
+    """Return review count. Returns 0 if missing or unparseable."""
+    if raw is None:
+        return 0
+    try:
+        s = str(raw).strip().lower().replace(",", "")
+        # Handle "1.2k", "2k", "1.5k" style strings
+        if s.endswith("k"):
+            return int(float(s[:-1]) * 1000)
+        return max(0, int(float(s)))
+    except (ValueError, TypeError):
+        return 0
+
+
+# ── Relevance filter ──────────────────────────────────────────────────────────
+
+IRRELEVANT_KEYWORDS: dict[str, list[str]] = {
+    "headphones": ["case", "cover", "stand", "holder", "pad", "cushion",
+                   "cable", "adapter", "charger", "pouch", "bag", "hook",
+                   "hanger", "mount", "replacement", "spare"],
+    "earbuds":    ["case", "cover", "tip", "foam tip", "ear tip", "cable",
+                   "adapter", "charger", "wing tip", "replacement"],
+    "phone":      ["case", "cover", "tempered glass", "screen protector",
+                   "charger", "cable", "holder", "stand", "pop socket",
+                   "back cover", "flip cover", "wallet case"],
+    "laptop":     ["bag", "sleeve", "stand", "cooling pad", "skin",
+                   "keyboard cover", "charger", "adapter", "cable",
+                   "mouse pad", "sticker"],
+    "tv":         ["wall mount", "bracket", "remote", "stand", "cover",
+                   "screen guard", "hdmi", "cable"],
+    "camera":     ["bag", "case", "strap", "tripod", "filter", "lens cap",
+                   "memory card", "battery", "charger"],
+}
+
+
+def _is_relevant(title: str, category: str) -> bool:
+    """Return False if the title looks like an accessory, not the main product."""
+    irrelevant = IRRELEVANT_KEYWORDS.get(category, [])
+    title_lower = title.lower()
+    for kw in irrelevant:
+        if kw in title_lower:
+            logger.info(f"Filtering accessory: '{title}'")
+            return False
+    return True
+
+
+# ── Deduplication ─────────────────────────────────────────────────────────────
+
+def _deduplicate(products: list[dict]) -> list[dict]:
+    """
+    Remove duplicate products. Two products are duplicates if their
+    titles are very similar (first 40 chars match after lowercasing).
+    Keep the one with the lower price.
+    """
+    seen: dict[str, dict] = {}
+    for p in products:
+        key = p["title"].lower()[:40].strip()
+        if key not in seen:
+            seen[key] = p
+        else:
+            # Keep cheaper one
+            if p["price"] < seen[key]["price"]:
+                seen[key] = p
+    return list(seen.values())
+
+
 # ── Query enrichment ──────────────────────────────────────────────────────────
 
 def _enrich_query(query: str) -> str:
@@ -119,45 +253,7 @@ def _broaden_query(query: str) -> str:
     return ' '.join(q.split())  # collapse extra spaces
 
 
-# ── Tier 1: Serper.dev ────────────────────────────────────────────────────────
-
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
-def _call_serper(query: str, max_price: float | None = None) -> list[dict]:
-    """Call Serper.dev Google Shopping API. Retries up to 3 times."""
-    search_query = _enrich_query(query)
-    if max_price:
-        # Serper respects price:..NNN Google Shopping syntax
-        search_query = f"{search_query} price:..{int(max_price)}"
-    r = requests.post(
-        SERPER_ENDPOINT,
-        headers={"X-API-KEY": os.getenv("SERPER_API_KEY", "")},
-        json={"q": search_query, "gl": "in", "num": 20},
-        timeout=10,
-    )
-    r.raise_for_status()
-    return _parse_serper_response(r.json(), max_price=max_price)
-
-
-def _parse_serper_response(data: dict, max_price: float | None = None) -> list[dict]:
-    """Parse Serper shopping response into normalised product dicts."""
-    products = []
-    for item in data.get("shopping", []):
-        price = _parse_price(item.get("price"))
-        if price is None or price <= 0:
-            continue
-        # Hard filter — drop anything above budget
-        if max_price and price > max_price:
-            continue
-        products.append({
-            "title":        item.get("title", "Unknown Product"),
-            "price":        price,
-            "rating":       float(item.get("rating") or 3.5),
-            "review_count": _parse_int(item.get("ratingCount") or item.get("reviews") or 0),
-            "source":       item.get("source", "Unknown"),
-            "link":         item.get("link", "#"),
-        })
-    return products
-
+# ── Price parser (raw string → float) ────────────────────────────────────────
 
 def _parse_price(raw) -> float | None:
     """Convert price strings like '₹54,990' or '54990.0' to float."""
@@ -178,9 +274,77 @@ def _parse_int(raw) -> int:
         return 0
 
 
+# ── Tier 1: Serper.dev ────────────────────────────────────────────────────────
+
+def _parse_serper_response(
+    data: dict,
+    max_price: float | None = None,
+    category: str = "default",
+) -> list[dict]:
+    """Parse Serper shopping response into sanitised, normalised product dicts."""
+    products = []
+    for item in data.get("shopping", []):
+        price = _parse_price(item.get("price"))
+        if price is None or price <= 0:
+            continue
+
+        # Hard sanity check — drop impossible prices
+        if not _is_price_sane(price, category, max_price):
+            logger.info(
+                f"Dropping '{item.get('title', '?')}' — "
+                f"price ₹{price:,.0f} fails sanity check for {category}"
+            )
+            continue
+
+        # Filter accessories / irrelevant results
+        title = item.get("title", "Unknown Product")
+        if not _is_relevant(title, category):
+            continue
+
+        products.append({
+            "title":            title,
+            "price":            price,
+            "rating":           _validate_rating(item.get("rating")),
+            "review_count":     _validate_review_count(
+                                    item.get("ratingCount") or item.get("reviews")
+                                ),
+            "source":           item.get("source", "Unknown"),
+            "link":             item.get("link", "#"),
+            "has_real_rating":  item.get("rating") is not None,
+        })
+
+    return _deduplicate(products)
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
+def _call_serper(
+    query: str,
+    max_price: float | None = None,
+    category: str = "default",
+) -> list[dict]:
+    """Call Serper.dev Google Shopping API. Retries up to 3 times."""
+    search_query = _enrich_query(query)
+    if max_price:
+        # Serper respects price:..NNN Google Shopping syntax
+        search_query = f"{search_query} price:..{int(max_price)}"
+    r = requests.post(
+        SERPER_ENDPOINT,
+        headers={"X-API-KEY": os.getenv("SERPER_API_KEY", "")},
+        json={"q": search_query, "gl": "in", "num": 20},
+        timeout=10,
+    )
+    r.raise_for_status()
+    raw = r.json()
+    return _parse_serper_response(raw, max_price=max_price, category=category)
+
+
 # ── Tier 2: Groq Compound (web search fallback) ───────────────────────────────
 
-def _call_groq_search(query: str, max_price: float | None = None) -> list[dict]:
+def _call_groq_search(
+    query: str,
+    max_price: float | None = None,
+    category: str = "default",
+) -> list[dict]:
     """
     Use Groq's Compound model (has built-in web search) to find products.
     Returns a list of product dicts — may be less structured than Serper.
@@ -211,18 +375,21 @@ def _call_groq_search(query: str, max_price: float | None = None) -> list[dict]:
         price = float(p.get("price_inr") or p.get("price") or 0)
         if price <= 0:
             continue
-        # Hard filter — drop anything above budget
-        if max_price and price > max_price:
+        if not _is_price_sane(price, category, max_price):
+            continue
+        title = str(p.get("title", "Unknown"))
+        if not _is_relevant(title, category):
             continue
         normalised.append({
-            "title":        str(p.get("title", "Unknown")),
-            "price":        price,
-            "rating":       float(p.get("rating") or 3.5),
-            "review_count": int(p.get("review_count") or 0),
-            "source":       str(p.get("source", "Web")),
-            "link":         "#",
+            "title":           title,
+            "price":           price,
+            "rating":          _validate_rating(p.get("rating")),
+            "review_count":    _validate_review_count(p.get("review_count")),
+            "source":          str(p.get("source", "Web")),
+            "link":            "#",
+            "has_real_rating": p.get("rating") is not None,
         })
-    return normalised
+    return _deduplicate(normalised)
 
 
 # ── Agent entry point ─────────────────────────────────────────────────────────
@@ -233,11 +400,13 @@ def search_agent(state: AgentState) -> dict:
     Falls through Serper → Groq → Mock on failure.
     Always returns {"search_results": [...]} with optional "error" key.
     """
-    query = state["query"]
-    budget = _extract_budget(query)
+    query    = state["query"]
+    budget   = _extract_budget(query)
+    category = _detect_category(query)
 
     if budget:
         logger.info(f"Budget detected: ₹{budget:,.0f}")
+    logger.info(f"Category detected: {category}")
 
     # Honour MOCK_ONLY flag (useful for tests and offline dev)
     if os.getenv("MOCK_ONLY", "false").lower() == "true":
@@ -253,7 +422,7 @@ def search_agent(state: AgentState) -> dict:
     # Tier 1: Serper.dev
     if os.getenv("SERPER_API_KEY"):
         try:
-            results = _call_serper(query, max_price=budget)
+            results = _call_serper(query, max_price=budget, category=category)
             logger.info(f"Serper returned {len(results)} products for '{query}'")
 
             # Broaden if too few results
@@ -261,7 +430,7 @@ def search_agent(state: AgentState) -> dict:
                 logger.info("Too few results — retrying with broader query")
                 broader = _broaden_query(query)
                 if broader != query:
-                    extra = _call_serper(broader, max_price=budget)
+                    extra = _call_serper(broader, max_price=budget, category=category)
                     existing_titles = {p["title"] for p in results}
                     for p in extra:
                         if p["title"] not in existing_titles:
@@ -292,7 +461,7 @@ def search_agent(state: AgentState) -> dict:
     # Tier 2: Groq web search
     if os.getenv("GROQ_API_KEY"):
         try:
-            results = _call_groq_search(query, max_price=budget)
+            results = _call_groq_search(query, max_price=budget, category=category)
             if results:
                 logger.info(f"Groq fallback returned {len(results)} products")
                 return {

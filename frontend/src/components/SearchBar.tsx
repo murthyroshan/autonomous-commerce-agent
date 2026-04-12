@@ -1,8 +1,6 @@
 'use client'
 
 import { useState, type FormEvent, type KeyboardEvent } from 'react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 
 interface SearchBarProps {
   onSearch: (query: string) => void
@@ -15,7 +13,7 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
     const trimmed = value.trim()
-    if (trimmed) onSearch(trimmed)
+    if (trimmed && !loading) onSearch(trimmed)
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -28,53 +26,96 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex w-full max-w-3xl gap-2"
+      className="flex w-full max-w-2xl items-center gap-0 rounded-2xl overflow-hidden"
+      style={{
+        border: '1px solid #333',
+        background: '#111',
+        boxShadow: '0 0 0 0 transparent',
+        transition: 'box-shadow 0.2s ease',
+      }}
       aria-label="Product search form"
+      onFocus={(e) => {
+        const form = e.currentTarget
+        form.style.boxShadow = '0 0 0 2px rgba(124,58,237,0.5)'
+        form.style.borderColor = '#7c3aed'
+      }}
+      onBlur={(e) => {
+        // only remove focus ring when focus leaves the form entirely
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          const form = e.currentTarget
+          form.style.boxShadow = '0 0 0 0 transparent'
+          form.style.borderColor = '#333'
+        }
+      }}
     >
-      <Input
+      <input
         id="search-input"
         type="text"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Find the best gaming laptop under ₹80,000"
+        placeholder="Find the best gaming laptop under ₹80,000..."
         disabled={loading}
-        className="flex-1 text-sm h-11"
-        aria-label="Search query"
         autoComplete="off"
+        aria-label="Search query"
+        className="flex-1 bg-transparent px-5 py-3.5 text-sm outline-none"
+        style={{
+          color: '#f5f5f5',
+          caretColor: '#7c3aed',
+        }}
       />
-      <Button
+
+      <button
         id="search-submit"
         type="submit"
         disabled={loading || !value.trim()}
-        className="h-11 px-6 font-semibold"
+        className="flex items-center gap-2 px-6 py-3.5 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        style={{
+          background: '#7c3aed',
+          color: '#fff',
+          borderLeft: '1px solid rgba(255,255,255,0.08)',
+          minWidth: '110px',
+          justifyContent: 'center',
+        }}
+        onMouseEnter={(e) => {
+          if (!loading && value.trim()) {
+            e.currentTarget.style.background = '#6d28d9'
+          }
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = '#7c3aed'
+        }}
       >
         {loading ? (
-          <span className="flex items-center gap-2">
+          <>
+            {/* Spinner SVG */}
             <svg
-              className="h-4 w-4 animate-spin"
+              className="animate-spin-slow"
+              width="14"
+              height="14"
               viewBox="0 0 24 24"
               fill="none"
-              xmlns="http://www.w3.org/2000/svg"
               aria-hidden="true"
             >
               <circle
-                className="opacity-25"
                 cx="12" cy="12" r="10"
-                stroke="currentColor" strokeWidth="4"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeOpacity="0.25"
               />
               <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8v8H4z"
+                d="M12 2a10 10 0 0 1 10 10"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
               />
             </svg>
             Searching…
-          </span>
+          </>
         ) : (
           'Search'
         )}
-      </Button>
+      </button>
     </form>
   )
 }
