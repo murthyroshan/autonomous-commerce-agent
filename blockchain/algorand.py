@@ -84,5 +84,5 @@ def record_purchase_intent(product: dict, user_id: str = "demo") -> dict:
 
     return {
         "tx_id":        tx_id,
-        "explorer_url": f"https://testnet.algoexplorer.io/tx/{tx_id}",
+        "explorer_url": f"https://lora.algokit.io/testnet/transaction/{tx_id}",
     }
