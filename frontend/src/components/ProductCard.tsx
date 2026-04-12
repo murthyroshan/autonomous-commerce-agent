@@ -3,6 +3,14 @@
 import { useEffect, useState } from 'react'
 import type { ScoredProduct } from '@/hooks/useAgentStream'
 
+// ── Types for /api/confirm response ────────────────────────────────────────
+interface ConfirmResponse {
+  success: boolean
+  tx_id?: string
+  explorer_url?: string
+  error?: string
+}
+
 interface ProductCardProps {
   product: ScoredProduct
   isWinner?: boolean
@@ -74,6 +82,43 @@ export function ProductCard({
     const t = setTimeout(() => setBarWidth(scorePercent), 100 + index * 80)
     return () => clearTimeout(t)
   }, [scorePercent, index])
+
+  // ── Algorand confirm state ──────────────────────────────────────────────
+  type ConfirmState = 'idle' | 'loading' | 'success' | 'error'
+  const [confirmState, setConfirmState] = useState<ConfirmState>('idle')
+  const [txId, setTxId] = useState<string | null>(null)
+  const [explorerUrl, setExplorerUrl] = useState<string | null>(null)
+
+  async function handleConfirm() {
+    setConfirmState('loading')
+    try {
+      const res = await fetch('/api/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title:  product.title,
+          price:  product.price,
+          source: product.source,
+          link:   product.link,
+          score:  product.score ?? 0,
+        }),
+      })
+      const data: ConfirmResponse = await res.json()
+      if (data.success && data.tx_id && data.explorer_url) {
+        setTxId(data.tx_id)
+        setExplorerUrl(data.explorer_url)
+        setConfirmState('success')
+      } else if (data.success) {
+        // Blockchain not configured — local fallback (still success)
+        setConfirmState('error')
+      } else {
+        setConfirmState('error')
+      }
+    } catch {
+      // Network failure — never crash the UI
+      setConfirmState('error')
+    }
+  }
 
   const winnerStyle = isWinner
     ? {
@@ -207,6 +252,82 @@ export function ProductCard({
           {justification}
         </div>
       )}
+
+      {/* ── Confirm Purchase button / Algorand status ─────────────────────── */}
+      <div className="mt-4">
+        {confirmState === 'idle' && (
+          <button
+            id={`confirm-btn-${product.title.slice(0, 20).replace(/\s+/g, '-').toLowerCase()}`}
+            onClick={handleConfirm}
+            className="w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200"
+            style={{
+              background: isWinner
+                ? 'linear-gradient(135deg, #7c3aed, #6d28d9)'
+                : 'rgba(39,39,42,0.8)',
+              color: isWinner ? '#fff' : '#a1a1aa',
+              border: isWinner ? 'none' : '1px solid #333',
+            }}
+            onMouseEnter={(e) => {
+              if (!isWinner) return
+              ;(e.currentTarget as HTMLButtonElement).style.opacity = '0.85'
+            }}
+            onMouseLeave={(e) => {
+              ;(e.currentTarget as HTMLButtonElement).style.opacity = '1'
+            }}
+          >
+            {isWinner ? '⚡ Confirm Purchase' : 'Confirm Purchase'}
+          </button>
+        )}
+
+        {confirmState === 'loading' && (
+          <div
+            className="w-full rounded-xl px-4 py-2.5 text-center text-sm"
+            style={{ background: 'rgba(39,39,42,0.6)', color: '#71717a', border: '1px solid #333' }}
+          >
+            <span className="inline-block animate-pulse">⏳ Logging on Algorand…</span>
+          </div>
+        )}
+
+        {confirmState === 'success' && txId && (
+          <div className="flex flex-col gap-1">
+            <div
+              className="w-full rounded-xl px-4 py-2.5 text-center text-sm font-semibold"
+              style={{
+                background: 'rgba(16,185,129,0.12)',
+                color: '#34d399',
+                border: '1px solid rgba(16,185,129,0.3)',
+              }}
+            >
+              ✓ Logged on Algorand
+            </div>
+            <a
+              href={explorerUrl ?? '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-center text-xs transition-colors"
+              style={{ color: '#52525b' }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
+              title="View on Algorand Explorer"
+            >
+              TX: {txId.slice(0, 12)}…
+            </a>
+          </div>
+        )}
+
+        {confirmState === 'error' && (
+          <div
+            className="w-full rounded-xl px-4 py-2.5 text-center text-sm"
+            style={{
+              background: 'rgba(217,119,6,0.1)',
+              color: '#fbbf24',
+              border: '1px solid rgba(217,119,6,0.25)',
+            }}
+          >
+            Purchase noted locally
+          </div>
+        )}
+      </div>
     </div>
   )
 }

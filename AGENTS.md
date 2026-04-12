@@ -143,7 +143,7 @@ pytest tests/ -v
 | 1 | Core agent pipeline (mock data) | 🔲 TODO |
 | 2 | Real data + Serper.dev + retries | 🔲 TODO |
 | 3 | Frontend + SSE streaming | 🔲 TODO |
-| 4 | Algorand testnet payment log | 🔲 TODO |
+| 4 | Algorand testnet payment log | ✅ DONE |
 | 5 | Smart contract + Pera wallet | 🔲 TODO |
 | 6 | Memory + polish | 🔲 TODO |
 
