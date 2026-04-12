@@ -29,8 +29,22 @@ FALLBACK_MODEL = "llama3-8b-8192"
 
 
 def _build_prompt(product: dict, all_products: list[dict]) -> str:
-    """Build the decision prompt with context about competing products."""
+    """Build the decision prompt. Adapts for single-product vs multi-product scenarios."""
     competitors = [p for p in all_products if p["title"] != product["title"]][:3]
+
+    if not competitors:
+        # Single product — value-assessment prompt (no "other options" language)
+        return (
+            f"You are helping a user choose a product.\n\n"
+            f"PRODUCT FOUND:\n"
+            f"- Name: {product['title']}\n"
+            f"- Price: ₹{product['price']:,.0f}\n"
+            f"- Rating: {product['rating']}★ ({product['review_count']:,} reviews)\n\n"
+            f"In exactly 2 sentences, explain whether this product offers "
+            f"good value at this price. Be honest — if it looks weak, say so."
+        )
+
+    # Multiple products — comparison prompt
     competitor_text = "\n".join(
         f"- {p['title']}: ₹{p['price']:,.0f}, {p['rating']}★"
         for p in competitors
