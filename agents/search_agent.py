@@ -35,28 +35,88 @@ def _get_groq_client() -> Groq:
 # ── Budget extraction ─────────────────────────────────────────────────────────
 
 def _extract_budget(query: str) -> float | None:
-    """Extract upper price limit from query. Returns None if not found."""
-    # Match patterns like: under 30000, below ₹30,000, less than 30k,
-    # within 30000, upto 30k, under 30K, <30000
-    pattern = r'(?:under|below|less\s+than|within|upto|up\s+to|<)\s*₹?\s*([\d,]+)\s*k?'
-    match = re.search(pattern, query, re.IGNORECASE)
-    if not match:
-        return None
-    value = float(match.group(1).replace(',', ''))
-    # Handle "30k" → 30000
-    if re.search(r'\d\s*k\b', match.group(0), re.IGNORECASE):
-        value *= 1000
-    return value
+    """Extract upper price limit from query. Returns None if not found.
+
+    Handles:
+      - between X and Y → upper bound Y
+      - under/below/within/upto/for/around/₹/rs. + number
+      - 25k, 30K (case-insensitive k suffix)
+      - Hindi: "30000 mein", "30k rupay"
+      - standalone number near budget words
+    """
+    q = query.lower()
+
+    # Pattern 1: between X and Y → use Y as upper bound
+    between = re.search(
+        r'between\s*₹?\s*([\d,]+)\s*k?\s*(?:and|to|-)\s*₹?\s*([\d,]+)\s*(k|thousand)?',
+        q,
+    )
+    if between:
+        val = float(between.group(2).replace(',', ''))
+        if between.group(3) in ('k', 'thousand'):
+            val *= 1000
+        return val
+
+    # Pattern 2: explicit keyword + number
+    explicit = re.search(
+        r'(?:under|below|less\s+than|within|upto|up\s+to|around|'
+        r'for|budget\s+of|<|₹|rs\.?|inr)\s*₹?\s*([\d,]+)\s*(k|thousand)?',
+        q,
+    )
+    if explicit:
+        val = float(explicit.group(1).replace(',', ''))
+        if explicit.group(2) in ('k', 'thousand'):
+            val *= 1000
+        if 'around' in q:
+            val *= 1.10
+        return val
+
+    # Pattern 3: Hindi "X mein" / "X rupay" pattern
+    hindi = re.search(r'([\d,]+)\s*(k)?\s*(?:mein|me\b|rupay|rupee)', q)
+    if hindi:
+        val = float(hindi.group(1).replace(',', ''))
+        if hindi.group(2) == 'k':
+            val *= 1000
+        return val
+
+    # Pattern 4: standalone number near budget-related words
+    if any(w in q for w in ['budget', 'price', 'cost', 'spend', 'afford']):
+        num = re.search(r'([\d,]+)\s*(k)?', q)
+        if num:
+            val = float(num.group(1).replace(',', ''))
+            if num.group(2) == 'k':
+                val *= 1000
+            if val > 1000:
+                return val
+
+    return None
 
 
 # ── Query enrichment ──────────────────────────────────────────────────────────
 
 def _enrich_query(query: str) -> str:
-    """Append 'buy online India' when no platform is mentioned to improve Shopping results."""
+    """Append context for better Google Shopping results in the Indian market."""
     q = query.lower()
-    if "amazon" not in q and "flipkart" not in q:
-        return f"{query} buy online India"
-    return query
+    # Already has platform or site context — leave as-is
+    if any(w in q for w in ['amazon', 'flipkart', 'site:']):
+        return query
+    # Already has India context — just add buy-intent
+    if any(w in q for w in ['india', 'indian', 'inr', '₹']):
+        return f"{query} buy online"
+    # Generic: add India + buy-intent
+    return f"{query} buy online India"
+
+
+def _broaden_query(query: str) -> str:
+    """Strip premium qualifiers to widen the result set."""
+    qualifiers = [
+        'gaming', 'best', 'top', 'premium', 'pro', 'ultra',
+        'high end', 'high-end', 'flagship',
+    ]
+    q = query
+    for word in qualifiers:
+        q = re.sub(rf'\b{word}\b', '', q, flags=re.IGNORECASE)
+    return ' '.join(q.split())  # collapse extra spaces
 
 
 # ── Tier 1: Serper.dev ────────────────────────────────────────────────────────
@@ -185,18 +245,44 @@ def search_agent(state: AgentState) -> dict:
         mock_results = get_mock_products(query)
         if budget:
             mock_results = [p for p in mock_results if p["price"] <= budget]
-        return {
-            "search_results": mock_results,
-            "error": "Mock mode — MOCK_ONLY=true",
-        }
+        error = "Mock mode — MOCK_ONLY=true"
+        if len(mock_results) < 3:
+            error = f"Limited results for this budget — showing {len(mock_results)} product(s)"
+        return {"search_results": mock_results, "error": error}
 
     # Tier 1: Serper.dev
     if os.getenv("SERPER_API_KEY"):
         try:
             results = _call_serper(query, max_price=budget)
+            logger.info(f"Serper returned {len(results)} products for '{query}'")
+
+            # Broaden if too few results
+            if len(results) < 3 and budget:
+                logger.info("Too few results — retrying with broader query")
+                broader = _broaden_query(query)
+                if broader != query:
+                    extra = _call_serper(broader, max_price=budget)
+                    existing_titles = {p["title"] for p in results}
+                    for p in extra:
+                        if p["title"] not in existing_titles:
+                            results.append(p)
+                            existing_titles.add(p["title"])
+
+            # Pad with mock products if still thin
+            if len(results) < 3:
+                mock = get_mock_products(query)
+                if budget:
+                    mock = [p for p in mock if p["price"] <= budget]
+                existing_titles = {p["title"] for p in results}
+                for p in mock:
+                    if p["title"] not in existing_titles and len(results) < 5:
+                        results.append(p)
+
             if results:
-                logger.info(f"Serper returned {len(results)} products for '{query}'")
-                return {"search_results": results}
+                out: dict = {"search_results": results}
+                if len(results) < 3:
+                    out["error"] = f"Limited results for this budget — showing {len(results)} product(s)"
+                return out
             logger.warning("Serper returned 0 products — trying Groq fallback")
         except (RetryError, Exception) as e:
             logger.warning(f"Serper failed after retries: {e} — trying Groq fallback")

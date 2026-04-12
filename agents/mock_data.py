@@ -174,6 +174,40 @@ MOCK_PRODUCTS: dict[str, list[dict]] = {
             "link": "https://www.amazon.in/dp/HP005",
         },
     ],
+    "earbuds": [
+        {
+            "title": "boAt Airdopes 141 TWS Earbuds (42H Playtime, ENx Tech)",
+            "price": 1299.0,
+            "rating": 4.1,
+            "review_count": 45000,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/EB001",
+        },
+        {
+            "title": "realme Buds Air 5 TWS Earbuds (50dB ANC, 38H Playtime)",
+            "price": 3999.0,
+            "rating": 4.2,
+            "review_count": 12000,
+            "source": "Flipkart",
+            "link": "https://www.flipkart.com/realme-buds-air-5",
+        },
+        {
+            "title": "Samsung Galaxy Buds FE True Wireless Earbuds (ANC, Comfort Fit)",
+            "price": 5999.0,
+            "rating": 4.3,
+            "review_count": 8500,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/EB003",
+        },
+        {
+            "title": "Sony WF-C700N TWS Earbuds (Noise Cancelling, 15H Battery)",
+            "price": 7990.0,
+            "rating": 4.4,
+            "review_count": 3200,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/EB004",
+        },
+    ],
     "tablet": [
         {
             "title": "Samsung Galaxy Tab A9+ (8GB/128GB, Wi-Fi, 11-inch)",
@@ -407,10 +441,13 @@ MOCK_PRODUCTS: dict[str, list[dict]] = {
 }
 
 # Keyword → category mapping. Checked in order; first match wins.
+# Checked in order — first match wins.
+# earbuds MUST come before headphones so "wireless earbuds" hits the right category.
 CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "laptop":     ["laptop", "notebook", "macbook", "chromebook", "gaming laptop"],
-    "headphones": ["headphone", "headset", "earphone", "earbud", "airpod",
-                   "neckband", "iem", "in-ear", "over-ear", "wired earphone"],
+    "earbuds":    ["earbud", "tws", "truly wireless", "in-ear", "iem",
+                   "airpod", "galaxy buds", "neckband", "wireless earphone"],
+    "headphones": ["headphone", "headset", "over-ear", "on-ear"],
     "phone":      ["phone", "mobile", "smartphone", "iphone", "android", "redmi",
                    "samsung", "oneplus", "realme", "poco", "vivo", "oppo"],
     "tv":         ["tv", "television", "smart tv", "oled", "qled", "monitor"],
