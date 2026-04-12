@@ -45,3 +45,20 @@ GEMINI.md
 gemini.md
 COPILOT.md
 copilot.md
+
+# Temporary validation / check scripts
+_all_checks.py
+_check*.py
+check*.py
+
+# Frontend build artifacts
+frontend/.next/
+frontend/node_modules/
+frontend/out/
+
+# OS
+Thumbs.db
+
+# Logs
+*.log
+logs/
