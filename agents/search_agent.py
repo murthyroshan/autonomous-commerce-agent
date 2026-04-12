@@ -32,27 +32,61 @@ def _get_groq_client() -> Groq:
     return _groq_client
 
 
+# ── Budget extraction ─────────────────────────────────────────────────────────
+
+def _extract_budget(query: str) -> float | None:
+    """Extract upper price limit from query. Returns None if not found."""
+    # Match patterns like: under 30000, below ₹30,000, less than 30k,
+    # within 30000, upto 30k, under 30K, <30000
+    pattern = r'(?:under|below|less\s+than|within|upto|up\s+to|<)\s*₹?\s*([\d,]+)\s*k?'
+    match = re.search(pattern, query, re.IGNORECASE)
+    if not match:
+        return None
+    value = float(match.group(1).replace(',', ''))
+    # Handle "30k" → 30000
+    if re.search(r'\d\s*k\b', match.group(0), re.IGNORECASE):
+        value *= 1000
+    return value
+
+
+# ── Query enrichment ──────────────────────────────────────────────────────────
+
+def _enrich_query(query: str) -> str:
+    """Append 'buy online India' when no platform is mentioned to improve Shopping results."""
+    q = query.lower()
+    if "amazon" not in q and "flipkart" not in q:
+        return f"{query} buy online India"
+    return query
+
+
 # ── Tier 1: Serper.dev ────────────────────────────────────────────────────────
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
-def _call_serper(query: str) -> list[dict]:
+def _call_serper(query: str, max_price: float | None = None) -> list[dict]:
     """Call Serper.dev Google Shopping API. Retries up to 3 times."""
+    search_query = _enrich_query(query)
+    if max_price:
+        # Serper respects price:..NNN Google Shopping syntax
+        search_query = f"{search_query} price:..{int(max_price)}"
     r = requests.post(
         SERPER_ENDPOINT,
         headers={"X-API-KEY": os.getenv("SERPER_API_KEY", "")},
-        json={"q": query, "gl": "in", "num": 10},
+        json={"q": search_query, "gl": "in", "num": 20},
         timeout=10,
     )
     r.raise_for_status()
-    return _parse_serper_response(r.json())
+    return _parse_serper_response(r.json(), max_price=max_price)
 
 
-def _parse_serper_response(data: dict) -> list[dict]:
+def _parse_serper_response(data: dict, max_price: float | None = None) -> list[dict]:
     """Parse Serper shopping response into normalised product dicts."""
     products = []
     for item in data.get("shopping", []):
         price = _parse_price(item.get("price"))
         if price is None or price <= 0:
+            continue
+        # Hard filter — drop anything above budget
+        if max_price and price > max_price:
             continue
         products.append({
             "title":        item.get("title", "Unknown Product"),
@@ -86,7 +120,7 @@ def _parse_int(raw) -> int:
 
 # ── Tier 2: Groq Compound (web search fallback) ───────────────────────────────
 
-def _call_groq_search(query: str) -> list[dict]:
+def _call_groq_search(query: str, max_price: float | None = None) -> list[dict]:
     """
     Use Groq's Compound model (has built-in web search) to find products.
     Returns a list of product dicts — may be less structured than Serper.
@@ -117,6 +151,9 @@ def _call_groq_search(query: str) -> list[dict]:
         price = float(p.get("price_inr") or p.get("price") or 0)
         if price <= 0:
             continue
+        # Hard filter — drop anything above budget
+        if max_price and price > max_price:
+            continue
         normalised.append({
             "title":        str(p.get("title", "Unknown")),
             "price":        price,
@@ -137,19 +174,26 @@ def search_agent(state: AgentState) -> dict:
     Always returns {"search_results": [...]} with optional "error" key.
     """
     query = state["query"]
+    budget = _extract_budget(query)
+
+    if budget:
+        logger.info(f"Budget detected: ₹{budget:,.0f}")
 
     # Honour MOCK_ONLY flag (useful for tests and offline dev)
     if os.getenv("MOCK_ONLY", "false").lower() == "true":
         logger.info("MOCK_ONLY=true — skipping live search")
+        mock_results = get_mock_products(query)
+        if budget:
+            mock_results = [p for p in mock_results if p["price"] <= budget]
         return {
-            "search_results": get_mock_products(query),
+            "search_results": mock_results,
             "error": "Mock mode — MOCK_ONLY=true",
         }
 
     # Tier 1: Serper.dev
     if os.getenv("SERPER_API_KEY"):
         try:
-            results = _call_serper(query)
+            results = _call_serper(query, max_price=budget)
             if results:
                 logger.info(f"Serper returned {len(results)} products for '{query}'")
                 return {"search_results": results}
@@ -162,7 +206,7 @@ def search_agent(state: AgentState) -> dict:
     # Tier 2: Groq web search
     if os.getenv("GROQ_API_KEY"):
         try:
-            results = _call_groq_search(query)
+            results = _call_groq_search(query, max_price=budget)
             if results:
                 logger.info(f"Groq fallback returned {len(results)} products")
                 return {
@@ -176,7 +220,10 @@ def search_agent(state: AgentState) -> dict:
 
     # Tier 3: Mock data (always works)
     logger.info(f"Using mock data for query: '{query}'")
+    mock_results = get_mock_products(query)
+    if budget:
+        mock_results = [p for p in mock_results if p["price"] <= budget]
     return {
-        "search_results": get_mock_products(query),
+        "search_results": mock_results,
         "error": "Live search unavailable — showing sample data",
     }

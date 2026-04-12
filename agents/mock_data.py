@@ -8,12 +8,12 @@ Covers the most common Indian e-commerce search categories.
 MOCK_PRODUCTS: dict[str, list[dict]] = {
     "laptop": [
         {
-            "title": "ASUS VivoBook 15 (Ryzen 5 5500U, 16GB RAM, 512GB SSD)",
-            "price": 54990.0,
-            "rating": 4.3,
-            "review_count": 2847,
+            "title": "Acer Aspire Lite (Intel Core i3-1215U, 8GB RAM, 512GB SSD)",
+            "price": 28990.0,
+            "rating": 4.1,
+            "review_count": 1247,
             "source": "Amazon",
-            "link": "https://www.amazon.in/dp/B09ABC001",
+            "link": "https://www.amazon.in/dp/B0CABC001",
         },
         {
             "title": "Lenovo IdeaPad Gaming 3 (i5-12450H, 16GB, RTX 3050)",
@@ -174,6 +174,210 @@ MOCK_PRODUCTS: dict[str, list[dict]] = {
             "link": "https://www.amazon.in/dp/HP005",
         },
     ],
+    "tablet": [
+        {
+            "title": "Samsung Galaxy Tab A9+ (8GB/128GB, Wi-Fi, 11-inch)",
+            "price": 23999.0,
+            "rating": 4.3,
+            "review_count": 4200,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/TAB001",
+        },
+        {
+            "title": "Redmi Pad SE (8GB/256GB, Snapdragon 680, 11-inch)",
+            "price": 17999.0,
+            "rating": 4.1,
+            "review_count": 3100,
+            "source": "Flipkart",
+            "link": "https://www.flipkart.com/redmi-pad-se",
+        },
+        {
+            "title": "Realme Pad 2 (6GB/128GB, Unisoc T616, 11.5-inch)",
+            "price": 14999.0,
+            "rating": 4.0,
+            "review_count": 2200,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/TAB003",
+        },
+        {
+            "title": "Apple iPad (10th Gen, 64GB, Wi-Fi)",
+            "price": 49900.0,
+            "rating": 4.7,
+            "review_count": 9800,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/TAB004",
+        },
+    ],
+    "speaker": [
+        {
+            "title": "JBL Charge 5 Portable Bluetooth Speaker",
+            "price": 14999.0,
+            "rating": 4.6,
+            "review_count": 8900,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/SPK001",
+        },
+        {
+            "title": "Boat Stone 1200 14W Bluetooth Speaker",
+            "price": 2499.0,
+            "rating": 4.1,
+            "review_count": 12400,
+            "source": "Flipkart",
+            "link": "https://www.flipkart.com/boat-stone-1200",
+        },
+        {
+            "title": "Sony SRS-XB33 Extra Bass Bluetooth Speaker",
+            "price": 9999.0,
+            "rating": 4.4,
+            "review_count": 5600,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/SPK003",
+        },
+        {
+            "title": "Bose SoundLink Flex Bluetooth Portable Speaker",
+            "price": 11900.0,
+            "rating": 4.5,
+            "review_count": 3200,
+            "source": "Croma",
+            "link": "https://www.croma.com/bose-soundlink-flex",
+        },
+    ],
+    "camera": [
+        {
+            "title": "Canon EOS 1500D DSLR (18-55mm Lens, 24.1 MP)",
+            "price": 34995.0,
+            "rating": 4.4,
+            "review_count": 7800,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/CAM001",
+        },
+        {
+            "title": "Sony Alpha ZV-E10 Mirrorless Camera (16-50mm Lens)",
+            "price": 62990.0,
+            "rating": 4.5,
+            "review_count": 2900,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/CAM002",
+        },
+        {
+            "title": "GoPro Hero 12 Black Action Camera",
+            "price": 39999.0,
+            "rating": 4.3,
+            "review_count": 4100,
+            "source": "Flipkart",
+            "link": "https://www.flipkart.com/gopro-hero12",
+        },
+        {
+            "title": "Logitech C920 HD Pro Webcam (1080p/30fps)",
+            "price": 7495.0,
+            "rating": 4.3,
+            "review_count": 6300,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/CAM004",
+        },
+    ],
+    "watch": [
+        {
+            "title": "Samsung Galaxy Watch 6 Classic (47mm, Bluetooth)",
+            "price": 34999.0,
+            "rating": 4.4,
+            "review_count": 3600,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/WCH001",
+        },
+        {
+            "title": "Noise ColorFit Ultra 3 Smartwatch (AMOLED, Bluetooth Calling)",
+            "price": 2999.0,
+            "rating": 4.1,
+            "review_count": 15000,
+            "source": "Flipkart",
+            "link": "https://www.flipkart.com/noise-colorfit-ultra3",
+        },
+        {
+            "title": "Amazfit GTS 4 Mini Smartwatch (GPS, SpO2, 70 Sports Modes)",
+            "price": 6999.0,
+            "rating": 4.2,
+            "review_count": 5400,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/WCH003",
+        },
+        {
+            "title": "Mi Band 8 Pro Fitness Tracker (AMOLED, Heart Rate)",
+            "price": 4999.0,
+            "rating": 4.3,
+            "review_count": 8200,
+            "source": "Flipkart",
+            "link": "https://www.flipkart.com/mi-band-8-pro",
+        },
+    ],
+    "keyboard": [
+        {
+            "title": "Keychron K2 V2 Mechanical Keyboard (TKL, Gateron Brown)",
+            "price": 8499.0,
+            "rating": 4.5,
+            "review_count": 3200,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/KB001",
+        },
+        {
+            "title": "Logitech MX Keys S Wireless Keyboard (Backlit)",
+            "price": 9995.0,
+            "rating": 4.4,
+            "review_count": 2700,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/KB002",
+        },
+        {
+            "title": "Cosmic Byte CB-GK-26 Firefly Mechanical Keyboard (Blue Switch)",
+            "price": 2499.0,
+            "rating": 4.0,
+            "review_count": 9800,
+            "source": "Flipkart",
+            "link": "https://www.flipkart.com/cosmic-byte-cb-gk-26",
+        },
+        {
+            "title": "Zebronics Max Plus Mechanical Gaming Keyboard (RGB, Blue Switch)",
+            "price": 1799.0,
+            "rating": 3.9,
+            "review_count": 6500,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/KB004",
+        },
+    ],
+    "mouse": [
+        {
+            "title": "Logitech G502 X Wired Gaming Mouse (25600 DPI, HERO Sensor)",
+            "price": 4995.0,
+            "rating": 4.6,
+            "review_count": 5100,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/MS001",
+        },
+        {
+            "title": "Razer DeathAdder V3 Gaming Mouse (30000 DPI, Focus Pro Sensor)",
+            "price": 7999.0,
+            "rating": 4.5,
+            "review_count": 2300,
+            "source": "Flipkart",
+            "link": "https://www.flipkart.com/razer-deathadder-v3",
+        },
+        {
+            "title": "Portronics Toad 23 Wireless Mouse (2.4GHz, 1600 DPI)",
+            "price": 699.0,
+            "rating": 4.0,
+            "review_count": 14200,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/MS003",
+        },
+        {
+            "title": "Zebronics Zeb-Transformer-M Wired Gaming Mouse (RGB, 3200 DPI)",
+            "price": 499.0,
+            "rating": 3.8,
+            "review_count": 11000,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/dp/MS004",
+        },
+    ],
     "default": [
         {
             "title": "Sample Product A",
@@ -202,11 +406,27 @@ MOCK_PRODUCTS: dict[str, list[dict]] = {
     ],
 }
 
+# Keyword → category mapping. Checked in order; first match wins.
+CATEGORY_KEYWORDS: dict[str, list[str]] = {
+    "laptop":     ["laptop", "notebook", "macbook", "chromebook", "gaming laptop"],
+    "headphones": ["headphone", "headset", "earphone", "earbud", "airpod",
+                   "neckband", "iem", "in-ear", "over-ear", "wired earphone"],
+    "phone":      ["phone", "mobile", "smartphone", "iphone", "android", "redmi",
+                   "samsung", "oneplus", "realme", "poco", "vivo", "oppo"],
+    "tv":         ["tv", "television", "smart tv", "oled", "qled", "monitor"],
+    "tablet":     ["tablet", "ipad", "tab ", "kindle"],
+    "speaker":    ["speaker", "bluetooth speaker", "soundbar", "home theatre"],
+    "camera":     ["camera", "dslr", "mirrorless", "action cam", "gopro", "webcam"],
+    "watch":      ["watch", "smartwatch", "fitness band", "fitbit", "mi band"],
+    "keyboard":   ["keyboard", "mechanical keyboard"],
+    "mouse":      ["mouse", "gaming mouse", "trackpad"],
+}
+
 
 def get_mock_products(query: str) -> list[dict]:
-    """Return mock products for the best-matching category."""
+    """Return mock products for the best-matching category using keyword lookup."""
     q = query.lower()
-    for category in MOCK_PRODUCTS:
-        if category in q:
-            return MOCK_PRODUCTS[category]
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        if any(kw in q for kw in keywords):
+            return MOCK_PRODUCTS.get(category, MOCK_PRODUCTS["default"])
     return MOCK_PRODUCTS["default"]
