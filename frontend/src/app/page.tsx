@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useAgentStream } from '@/hooks/useAgentStream'
-import { SearchBar } from '@/components/SearchBar'
+import { ChatFlow } from '@/components/ChatFlow'
 import { StatusTicker } from '@/components/StatusTicker'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { ProductGrid } from '@/components/ProductGrid'
@@ -47,8 +48,8 @@ export default function HomePage() {
           Describe what you want. The agent does the rest.
         </p>
 
-        {/* Search bar */}
-        <SearchBar onSearch={setQuery} loading={loading} />
+        {/* Chat flow for search & clarification */}
+        <ChatFlow onSearch={setQuery} disabled={loading} />
 
         {/* Status + error */}
         <div className="mt-5 flex w-full max-w-2xl flex-col items-center gap-3">
@@ -115,8 +116,29 @@ export default function HomePage() {
       )}
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="py-8 text-center text-xs" style={{ color: '#3f3f46' }}>
-        Kartiq · Built with FastAPI, Groq, Serper &amp; Algorand
+      <footer className="py-8 text-center text-xs flex flex-col items-center gap-2" style={{ color: '#3f3f46' }}>
+        <div className="flex items-center gap-4">
+          <Link
+            href="/history"
+            className="transition-colors"
+            style={{ color: '#52525b' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#52525b')}
+          >
+            History →
+          </Link>
+          <span style={{ color: '#2a2a2a' }}>·</span>
+          <Link
+            href="/history#watchlist"
+            className="transition-colors"
+            style={{ color: '#52525b' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#52525b')}
+          >
+            Watchlist →
+          </Link>
+        </div>
+        <span>Kartiq · Built with FastAPI, Groq, Serper &amp; Algorand</span>
       </footer>
     </div>
   )

@@ -19,9 +19,13 @@ logger = logging.getLogger(__name__)
 
 # ── Phase 1–2: Plain Python pipeline ────────────────────────────────────────
 
-def run_pipeline(query: str) -> AgentState:
+def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
     """
     Run the full agent pipeline: Search → Compare → Decide.
+
+    Args:
+        query:   Natural-language shopping query.
+        user_id: Used to load user preferences and preference boosts in compare_agent.
 
     Returns the final AgentState dict regardless of errors.
     Never raises — all exceptions are caught within individual agents.
@@ -30,7 +34,7 @@ def run_pipeline(query: str) -> AgentState:
         return {**initial_state(""), "error": "Query cannot be empty"}
 
     state = initial_state(query.strip())
-    logger.info(f"Pipeline started for query: '{query}'")
+    logger.info(f"Pipeline started for query: '{query}' user_id='{user_id}'")
 
     # Agent 1: Search
     state.update(search_agent(state))
@@ -38,8 +42,8 @@ def run_pipeline(query: str) -> AgentState:
         logger.warning("Pipeline stopping: search returned no results")
         return {**state, "error": state.get("error") or "No products found"}
 
-    # Agent 2: Compare
-    state.update(compare_agent(state))
+    # Agent 2: Compare (Phase 6: pass user_id for preference filtering/boosts)
+    state.update(compare_agent(state, user_id=user_id))
     if not state["scored_products"]:
         logger.warning("Pipeline stopping: compare returned no scored products")
         return {**state, "error": "Failed to score products"}
