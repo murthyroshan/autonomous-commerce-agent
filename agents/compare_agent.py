@@ -13,10 +13,17 @@ Data quality handling:
     by substituting 2.5 (below-average) as their effective rating.
     A "rating_verified" flag is added to every scored product so the
     frontend can render "Rating unverified" on those cards.
+
+Phase 6 additions:
+    - Accepts user_id to load preferences
+    - Calls apply_user_rules() to filter avoided brands / max price BEFORE scoring
+    - Applies preference boosts (+0.08 preferred brand, +0.04 preferred source)
+      AFTER scoring, then re-sorts
 """
 
 import logging
 from .state import AgentState
+from .memory import load_prefs, apply_user_rules
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +32,9 @@ WEIGHTS = {
     "rating":       0.35,
     "review_count": 0.20,
 }
+
+BOOST_BRAND  = 0.08
+BOOST_SOURCE = 0.04
 
 
 def _normalize(values: list[float], invert: bool = False) -> list[float]:
@@ -42,9 +52,11 @@ def _normalize(values: list[float], invert: bool = False) -> list[float]:
     return [1.0 - n for n in normed] if invert else normed
 
 
-def compare_agent(state: AgentState) -> dict:
+def compare_agent(state: AgentState, user_id: str = "demo") -> dict:
     """
     Score and rank all products in state["search_results"].
+
+    Phase 6: accepts user_id to apply preference filtering and boosts.
 
     Returns:
         {"scored_products": [...]}  — sorted descending by score.
@@ -55,6 +67,21 @@ def compare_agent(state: AgentState) -> dict:
     if not products:
         logger.warning("compare_agent called with empty search_results")
         return {"scored_products": []}
+
+    # ── Phase 6: load prefs and apply hard rules BEFORE scoring ──────────────
+    try:
+        prefs = load_prefs(user_id)
+    except Exception as e:
+        logger.warning(f"compare_agent: could not load prefs for '{user_id}' — {e}")
+        prefs = {}
+
+    products = apply_user_rules(products, prefs)
+    if not products:
+        logger.warning("compare_agent: all products removed by user rules")
+        return {"scored_products": []}
+
+    preferred_brands: list[str]  = [b.lower() for b in prefs.get("preferred_brands", []) if b]
+    preferred_sources: list[str] = [s.lower() for s in prefs.get("preferred_sources", []) if s]
 
     # ── Resolve effective rating per product ─────────────────────────────────
     # Products with rating=0.0 have no verified rating.
@@ -101,7 +128,26 @@ def compare_agent(state: AgentState) -> dict:
             }
         })
 
+    # ── Phase 6: apply preference boosts AFTER base scoring ──────────────────
+    for product in scored:
+        boosted = False
+        title_lower  = product.get("title", "").lower()
+        source_lower = product.get("source", "").lower()
+
+        if preferred_brands and any(b in title_lower for b in preferred_brands):
+            product["score"] = min(1.0, round(product["score"] + BOOST_BRAND, 4))
+            boosted = True
+
+        if preferred_sources and any(s in source_lower for s in preferred_sources):
+            product["score"] = min(1.0, round(product["score"] + BOOST_SOURCE, 4))
+            boosted = True
+
+        if boosted:
+            product["preference_boosted"] = True
+
+    # Re-sort after boosts
     scored.sort(key=lambda x: x["score"], reverse=True)
+
     logger.info(
         f"compare_agent scored {len(scored)} products. "
         f"Winner: '{scored[0]['title']}' (score={scored[0]['score']})"

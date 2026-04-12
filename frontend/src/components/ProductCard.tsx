@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import type { ScoredProduct } from '@/hooks/useAgentStream'
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 // ── Types for /api/confirm response ────────────────────────────────────────
 interface ConfirmResponse {
@@ -89,10 +91,16 @@ export function ProductCard({
   const [txId, setTxId] = useState<string | null>(null)
   const [explorerUrl, setExplorerUrl] = useState<string | null>(null)
 
+  // ── Watchlist state ─────────────────────────────────────────────────────
+  type WatchState = 'hidden' | 'input' | 'saved'
+  const [watchState, setWatchState] = useState<WatchState>('hidden')
+  const [targetPrice, setTargetPrice] = useState('')
+  const [watchSaving, setWatchSaving] = useState(false)
+
   async function handleConfirm() {
     setConfirmState('loading')
     try {
-      const res = await fetch('/api/confirm', {
+      const res = await fetch(`${API}/api/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -110,13 +118,41 @@ export function ProductCard({
         setConfirmState('success')
       } else if (data.success) {
         // Blockchain not configured — local fallback (still success)
-        setConfirmState('error')
+        setTxId(data.tx_id ?? null)
+        setConfirmState('success')
       } else {
         setConfirmState('error')
       }
     } catch {
       // Network failure — never crash the UI
       setConfirmState('error')
+    }
+  }
+
+  async function handleWatchSubmit(e: FormEvent) {
+    e.preventDefault()
+    const price = parseFloat(targetPrice.replace(/[₹,]/g, ''))
+    if (!price || price <= 0) return
+    setWatchSaving(true)
+    try {
+      await fetch(`${API}/api/watchlist`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id:       'demo',
+          title:         product.title,
+          current_price: product.price,
+          target_price:  price,
+          source:        product.source,
+          link:          product.link,
+          query:         product.title,
+        }),
+      })
+      setWatchState('saved')
+    } catch {
+      setWatchState('hidden')
+    } finally {
+      setWatchSaving(false)
     }
   }
 
@@ -288,8 +324,8 @@ export function ProductCard({
           </div>
         )}
 
-        {confirmState === 'success' && txId && (
-          <div className="flex flex-col gap-1">
+        {confirmState === 'success' && (
+          <div className="flex flex-col gap-2">
             <div
               className="w-full rounded-xl px-4 py-2.5 text-center text-sm font-semibold"
               style={{
@@ -298,20 +334,73 @@ export function ProductCard({
                 border: '1px solid rgba(16,185,129,0.3)',
               }}
             >
-              ✓ Logged on Algorand
+              ✓ Purchase confirmed
             </div>
-            <a
-              href={explorerUrl ?? '#'}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-center text-xs transition-colors"
-              style={{ color: '#52525b' }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
-              title="View on Algorand Explorer"
-            >
-              TX: {txId.slice(0, 12)}…
-            </a>
+            {txId && explorerUrl && (
+              <a
+                href={explorerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-center text-xs transition-colors"
+                style={{ color: '#52525b' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
+                title="View on Algorand Explorer"
+              >
+                TX: {txId.slice(0, 12)}…
+              </a>
+            )}
+
+            {/* ── Watch for price drop ───────────────────────────────── */}
+            {watchState === 'hidden' && (
+              <button
+                onClick={() => setWatchState('input')}
+                className="w-full rounded-xl px-4 py-2 text-xs font-medium transition-all"
+                style={{
+                  background: 'rgba(124,58,237,0.08)',
+                  color: '#a78bfa',
+                  border: '1px solid rgba(124,58,237,0.2)',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(124,58,237,0.14)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(124,58,237,0.08)')}
+              >
+                🔔 Watch for price drop
+              </button>
+            )}
+
+            {watchState === 'input' && (
+              <form onSubmit={handleWatchSubmit} className="flex gap-2">
+                <input
+                  type="number"
+                  placeholder="Target price (₹)"
+                  value={targetPrice}
+                  onChange={e => setTargetPrice(e.target.value)}
+                  className="flex-1 rounded-xl px-3 py-2 text-xs outline-none"
+                  style={{
+                    background: '#1a1a1a',
+                    color: '#f5f5f5',
+                    border: '1px solid #333',
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={watchSaving}
+                  className="rounded-xl px-3 py-2 text-xs font-semibold transition-opacity disabled:opacity-50"
+                  style={{ background: '#7c3aed', color: '#fff' }}
+                >
+                  {watchSaving ? '…' : 'Set'}
+                </button>
+              </form>
+            )}
+
+            {watchState === 'saved' && (
+              <div
+                className="w-full rounded-xl px-4 py-2 text-center text-xs"
+                style={{ background: 'rgba(124,58,237,0.08)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}
+              >
+                ✓ Watching for ₹{parseFloat(targetPrice).toLocaleString('en-IN', { maximumFractionDigits: 0 })} drop
+              </div>
+            )}
           </div>
         )}
 

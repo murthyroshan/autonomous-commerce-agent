@@ -75,7 +75,9 @@ export function useAgentStream(query: string | null) {
       }
     }
 
-    es.onerror = () => {
+    es.onerror = (err) => {
+      // EventSource doesn't give detailed errors, but if it fires, we lost connection or failed to connect.
+      setStreamError('Connection to agent server failed. Is the API running?')
       setLoading(false)
       es.close()
     }

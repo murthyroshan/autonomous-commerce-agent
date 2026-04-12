@@ -140,12 +140,12 @@ pytest tests/ -v
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 1 | Core agent pipeline (mock data) | 🔲 TODO |
-| 2 | Real data + Serper.dev + retries | 🔲 TODO |
-| 3 | Frontend + SSE streaming | 🔲 TODO |
+| 1 | Core agent pipeline (mock data) | ✅ DONE |
+| 2 | Real data + Serper.dev + retries | ✅ DONE |
+| 3 | Frontend + SSE streaming | ✅ DONE |
 | 4 | Algorand testnet payment log | ✅ DONE |
 | 5 | Smart contract + Pera wallet | 🔲 TODO |
-| 6 | Memory + polish | 🔲 TODO |
+| 6 | Memory + polish | ✅ DONE |
 
 Update this table as phases complete.
 

@@ -324,9 +324,6 @@ def _call_serper(
 ) -> list[dict]:
     """Call Serper.dev Google Shopping API. Retries up to 3 times."""
     search_query = _enrich_query(query)
-    if max_price:
-        # Serper respects price:..NNN Google Shopping syntax
-        search_query = f"{search_query} price:..{int(max_price)}"
     r = requests.post(
         SERPER_ENDPOINT,
         headers={"X-API-KEY": os.getenv("SERPER_API_KEY", "")},
@@ -437,15 +434,6 @@ def search_agent(state: AgentState) -> dict:
                             results.append(p)
                             existing_titles.add(p["title"])
 
-            # Pad with mock products if still thin
-            if len(results) < 3:
-                mock = get_mock_products(query)
-                if budget:
-                    mock = [p for p in mock if p["price"] <= budget]
-                existing_titles = {p["title"] for p in results}
-                for p in mock:
-                    if p["title"] not in existing_titles and len(results) < 5:
-                        results.append(p)
 
             if results:
                 out: dict = {"search_results": results}

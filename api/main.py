@@ -2,6 +2,7 @@
 
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -16,10 +17,21 @@ logging.basicConfig(
     format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
 )
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start background services on startup, clean up on shutdown."""
+    from api.watchlist_jobs import start_watchlist_scheduler
+    start_watchlist_scheduler()
+    yield  # app is running
+    # shutdown: APScheduler daemon threads exit automatically
+
+
 app = FastAPI(
     title="Autonomous Commerce AI Agent",
     description="AI-powered shopping assistant with Algorand blockchain logging",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -27,7 +39,9 @@ app.add_middleware(
     allow_origins=[
         os.getenv("FRONTEND_ORIGIN", "http://localhost:3000"),
         "http://localhost:3000",
+        "http://localhost:3001",
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -45,3 +59,4 @@ async def root():
         "docs":    "/docs",
         "health":  "/api/health",
     }
+

@@ -3,15 +3,19 @@
 import asyncio
 import json
 import logging
+import re
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from typing import Optional
 
 from agents.pipeline import run_pipeline
 from agents.state import initial_state
 from agents.search_agent import search_agent
 from agents.compare_agent import compare_agent
 from agents.decision_agent import decision_agent
+from agents.memory import load_prefs, save_pref, log_purchase, get_history
 from .models import SearchRequest, SearchResponse, ConfirmRequest, ConfirmResponse
 
 logger = logging.getLogger(__name__)
@@ -28,13 +32,13 @@ async def health():
 # ── POST /search — full pipeline, single response ────────────────────────────
 
 @router.post("/search", response_model=SearchResponse)
-async def search(request: SearchRequest):
+async def search(request: SearchRequest, user_id: str = Query(default="demo")):
     """
     Run the full agent pipeline and return the complete result.
     Use this for non-streaming clients.
     """
     try:
-        result = await asyncio.to_thread(run_pipeline, request.query)
+        result = await asyncio.to_thread(run_pipeline, request.query, user_id)
         return SearchResponse(
             query=result["query"],
             scored_products=result.get("scored_products", []),
@@ -49,7 +53,7 @@ async def search(request: SearchRequest):
 # ── GET /search/stream — SSE streaming endpoint ───────────────────────────────
 
 @router.get("/search/stream")
-async def search_stream(query: str):
+async def search_stream(query: str, user_id: str = Query(default="demo")):
     """
     Run the pipeline step-by-step, streaming status updates via SSE.
     Frontend connects with EventSource("/search/stream?query=...").
@@ -80,9 +84,9 @@ async def search_stream(query: str):
                 yield sse({"type": "error", "message": state.get("error", "No products found")})
                 return
 
-            # Step 2: Compare
+            # Step 2: Compare (Phase 6: pass user_id)
             yield sse({"type": "status", "message": f"Comparing {len(state['search_results'])} products..."})
-            compare_result = await asyncio.to_thread(compare_agent, state)
+            compare_result = await asyncio.to_thread(compare_agent, state, user_id)
             state.update(compare_result)
 
             # Step 3: Decision
@@ -119,35 +123,271 @@ async def search_stream(query: str):
 @router.post("/confirm", response_model=ConfirmResponse)
 async def confirm_purchase(request: ConfirmRequest):
     """
-    Log a confirmed purchase to Algorand testnet.
+    Log a confirmed purchase to Algorand testnet and record in local history.
     Phase 4: plain PaymentTxn with note field.
     Phase 5: smart contract escrow.
     """
+    tx_id = None
+    explorer_url = None
+    confirm_error = None
+
     try:
         # Lazy import — Algorand SDK not required until Phase 4
         from blockchain.algorand import record_purchase_intent
         result = await asyncio.to_thread(
             record_purchase_intent, request.model_dump(), request.user_id
         )
-        return ConfirmResponse(success=True, **result)
+        tx_id = result.get("tx_id")
+        explorer_url = result.get("explorer_url")
     except ImportError:
-        # Phase 1–3: blockchain module not yet implemented
         logger.info("Blockchain module not available (Phase 4+) — logging locally only")
-        return ConfirmResponse(
-            success=True,
-            tx_id="local-" + request.title[:8].replace(" ", "-").lower(),
-            explorer_url=None,
-            error="Blockchain logging not enabled yet",
-        )
+        tx_id = "local-" + request.title[:8].replace(" ", "-").lower()
+        confirm_error = "Blockchain logging not enabled yet"
     except ValueError as e:
-        # Phase 1–3: blockchain module exists but ALGORAND_MNEMONIC not configured yet
         logger.info(f"Blockchain not configured ({e}) — logging locally only")
-        return ConfirmResponse(
-            success=True,
-            tx_id="local-" + request.title[:8].replace(" ", "-").lower(),
-            explorer_url=None,
-            error="Blockchain credentials not configured — purchase noted locally",
-        )
+        tx_id = "local-" + request.title[:8].replace(" ", "-").lower()
+        confirm_error = "Blockchain credentials not configured — purchase noted locally"
     except Exception as e:
-        logger.error(f"Confirm purchase error: {e}", exc_info=True)
-        return ConfirmResponse(success=False, error=str(e))
+        logger.warning(f"Blockchain logging failed: {e}. Falling back to local history.")
+        tx_id = "local-" + request.title[:8].replace(" ", "-").lower()
+        confirm_error = f"Blockchain error: {str(e)} — purchase noted locally"
+
+    # Phase 6: log to local purchase history — never block the response
+    try:
+        product_dict = request.model_dump()
+        await asyncio.to_thread(log_purchase, request.user_id, product_dict, tx_id)
+    except Exception as e:
+        logger.warning(f"log_purchase failed (non-blocking): {e}")
+
+    return ConfirmResponse(
+        success=True,
+        tx_id=tx_id,
+        explorer_url=explorer_url,
+        error=confirm_error,
+    )
+
+
+# ── GET /api/history — purchase history ──────────────────────────────────────
+
+@router.get("/history")
+async def get_purchase_history(
+    user_id: str = Query(default="demo"),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    """Return the last `limit` confirmed purchases for user_id, newest first."""
+    try:
+        history = await asyncio.to_thread(get_history, user_id, limit)
+        return {"user_id": user_id, "history": history}
+    except Exception as e:
+        logger.error(f"get_history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── POST /api/prefs — update a preference key ────────────────────────────────
+
+class PrefsRequest(BaseModel):
+    user_id: str = "demo"
+    key: str
+    value: str  # always a string from JSON; comma-separated → list
+
+
+@router.post("/prefs")
+async def update_prefs(req: PrefsRequest):
+    """
+    Set a preference key for user_id.
+    If value is a comma-separated string and the key holds a list,
+    it is split automatically into a list.
+    """
+    LIST_KEYS = {"preferred_brands", "avoided_brands", "preferred_sources", "rules"}
+    value: object = req.value
+    if req.key in LIST_KEYS:
+        # comma-separated → list, strip whitespace
+        value = [item.strip() for item in req.value.split(",") if item.strip()]
+    elif req.key == "max_price":
+        try:
+            value = float(req.value)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="max_price must be a number")
+
+    try:
+        await asyncio.to_thread(save_pref, req.user_id, req.key, value)
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"update_prefs error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── POST /api/prefs/rule — natural-language rule parsing ─────────────────────
+
+class RuleRequest(BaseModel):
+    user_id: str = "demo"
+    rule: str
+
+
+def _parse_rule(rule: str) -> dict:
+    """
+    Map a natural-language rule to a structured pref update.
+    Examples:
+        "no refurbished"    → avoided_brands: ["refurbished"]
+        "avoid HP"          → avoided_brands: ["HP"]
+        "prefer Dell"       → preferred_brands: ["Dell"]
+        "under 50000"       → max_price: 50000.0
+        "max 80000"         → max_price: 80000.0
+    Returns: {"key": ..., "value": ...}
+    """
+    rule_lower = rule.strip().lower()
+
+    # "no X" / "never X" / "avoid X" → avoided_brands
+    m = re.match(r"^(?:no|never|avoid)\s+(.+)$", rule_lower)
+    if m:
+        brand = m.group(1).strip()
+        return {"key": "avoided_brands", "value": brand, "action": "append"}
+
+    # "prefer X" / "always X" → preferred_brands
+    m = re.match(r"^(?:prefer|always)\s+(.+?)(?:\s+over\s+.+)?$", rule_lower)
+    if m:
+        brand = m.group(1).strip()
+        return {"key": "preferred_brands", "value": brand, "action": "append"}
+
+    # "under X" / "max X" → max_price
+    m = re.match(r"^(?:under|max|maximum|below)\s+[\₹]?([\d,]+(?:\.\d+)?)", rule_lower)
+    if m:
+        price_str = m.group(1).replace(",", "")
+        return {"key": "max_price", "value": float(price_str), "action": "set"}
+
+    # Fallback: treat as a free-text rule added to the rules list
+    return {"key": "rules", "value": rule.strip(), "action": "append"}
+
+
+@router.post("/prefs/rule")
+async def add_preference_rule(req: RuleRequest):
+    """
+    Parse a natural-language rule and save it to user preferences.
+    Returns the interpreted action so the frontend can confirm it.
+    """
+    parsed = _parse_rule(req.rule)
+    key    = parsed["key"]
+    action = parsed.get("action", "set")
+    value  = parsed["value"]
+
+    try:
+        prefs = await asyncio.to_thread(load_prefs, req.user_id)
+        if action == "append":
+            current: list = prefs.get(key, [])
+            if value not in current:
+                current.append(value)
+            await asyncio.to_thread(save_pref, req.user_id, key, current)
+            interpreted = {key: current}
+        else:  # "set"
+            await asyncio.to_thread(save_pref, req.user_id, key, value)
+            interpreted = {key: value}
+
+        return {"success": True, "interpreted_as": interpreted}
+    except Exception as e:
+        logger.error(f"add_preference_rule error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Watchlist endpoints (Part B) ──────────────────────────────────────────────
+
+class WatchlistAddRequest(BaseModel):
+    user_id:       str   = "demo"
+    title:         str
+    current_price: float
+    target_price:  float
+    source:        str   = ""
+    link:          str   = ""
+    query:         str   = ""
+
+
+class WatchlistRemoveRequest(BaseModel):
+    user_id: str = "demo"
+    title:   str
+
+
+@router.post("/watchlist")
+async def watchlist_add(req: WatchlistAddRequest):
+    """Add a product to the user's price watchlist."""
+    from agents.watchlist import add_to_watchlist
+    try:
+        product = {
+            "title":  req.title,
+            "price":  req.current_price,
+            "source": req.source,
+            "link":   req.link,
+        }
+        await asyncio.to_thread(
+            add_to_watchlist, req.user_id, product, req.target_price, req.query
+        )
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"watchlist_add error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/watchlist")
+async def watchlist_get(user_id: str = Query(default="demo")):
+    """Return the full watchlist for user_id."""
+    from agents.watchlist import get_watchlist
+    try:
+        items = await asyncio.to_thread(get_watchlist, user_id)
+        return {"user_id": user_id, "watchlist": items}
+    except Exception as e:
+        logger.error(f"watchlist_get error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/watchlist")
+async def watchlist_remove(req: WatchlistRemoveRequest):
+    """Remove an item from the watchlist by title."""
+    from agents.watchlist import remove_from_watchlist
+    try:
+        await asyncio.to_thread(remove_from_watchlist, req.user_id, req.title)
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"watchlist_remove error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Conversational endpoints (Part D) ─────────────────────────────────────────
+
+class ClarifyRequest(BaseModel):
+    query:   str
+    user_id: str = "demo"
+
+
+class EnrichRequest(BaseModel):
+    original_query: str
+    answers:        dict
+
+
+@router.post("/clarify")
+async def clarify_query(req: ClarifyRequest):
+    """
+    Determine if a query is too vague.
+    If so, return 1-3 clarifying questions.
+    """
+    from agents.conversation_agent import needs_clarification, get_clarifying_questions
+    
+    # Needs clarification handles API errors internally & defaults to False
+    needs = await asyncio.to_thread(needs_clarification, req.query)
+    
+    if needs:
+        questions = await asyncio.to_thread(get_clarifying_questions, req.query)
+        if questions:
+            return {"needs_clarification": True, "questions": questions}
+
+    return {"needs_clarification": False, "questions": []}
+
+
+@router.post("/enrich")
+async def enrich_query(req: EnrichRequest):
+    """
+    Combine original vague query + users answers into a refined search query.
+    """
+    from agents.conversation_agent import build_enriched_query
+    
+    enriched = await asyncio.to_thread(
+        build_enriched_query, req.original_query, req.answers
+    )
+    return {"enriched_query": enriched}
