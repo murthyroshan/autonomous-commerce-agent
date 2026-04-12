@@ -7,6 +7,12 @@ Scoring weights:
     price        → 0.45  (inverted: lower price = higher score)
     rating       → 0.35
     review_count → 0.20
+
+Data quality handling:
+    Products with rating=0.0 have no verified rating and are penalised
+    by substituting 2.5 (below-average) as their effective rating.
+    A "rating_verified" flag is added to every scored product so the
+    frontend can render "Rating unverified" on those cards.
 """
 
 import logging
@@ -42,17 +48,30 @@ def compare_agent(state: AgentState) -> dict:
 
     Returns:
         {"scored_products": [...]}  — sorted descending by score.
-        Each product gets a new "score" key (float, 0–1, 4 decimal places).
+        Each product gets a new "score" key (float, 0–1, 4 decimal places)
+        plus a "rating_verified" boolean for the frontend to use.
     """
     products = state.get("search_results", [])
     if not products:
         logger.warning("compare_agent called with empty search_results")
         return {"scored_products": []}
 
-    # Extract dimension values
-    prices        = [float(p.get("price", 0) or 0)        for p in products]
-    ratings       = [float(p.get("rating", 3.5) or 3.5)   for p in products]
-    review_counts = [float(p.get("review_count", 0) or 0)  for p in products]
+    # ── Resolve effective rating per product ─────────────────────────────────
+    # Products with rating=0.0 have no verified rating.
+    # Penalise them by using 2.5 (below-average) for scoring.
+    for p in products:
+        raw_rating = float(p.get("rating", 0) or 0)
+        if raw_rating == 0.0:
+            p["_effective_rating"] = 2.5
+            p["_rating_verified"] = False
+        else:
+            p["_effective_rating"] = raw_rating
+            p["_rating_verified"] = True
+
+    # Extract dimension values (use effective rating, not raw)
+    prices        = [float(p.get("price", 0) or 0)                  for p in products]
+    ratings       = [float(p.get("_effective_rating", 2.5) or 2.5)  for p in products]
+    review_counts = [float(p.get("review_count", 0) or 0)           for p in products]
 
     # Normalize each dimension
     price_scores  = _normalize(prices, invert=True)
@@ -67,9 +86,14 @@ def compare_agent(state: AgentState) -> dict:
             WEIGHTS["rating"]       * rating_scores[i] +
             WEIGHTS["review_count"] * review_scores[i]
         )
+        # Expose rating_verified to the frontend; strip internal temp keys
+        rating_verified = product.pop("_rating_verified", True)
+        product.pop("_effective_rating", None)
+
         scored.append({
             **product,
             "score":           round(final_score, 4),
+            "rating_verified": rating_verified,
             "score_breakdown": {
                 "price_score":  round(price_scores[i], 4),
                 "rating_score": round(rating_scores[i], 4),

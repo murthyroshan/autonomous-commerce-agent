@@ -1,15 +1,26 @@
-import os
-from dotenv import load_dotenv
+"""Check 2 — Price sanity boundaries"""
+from agents.search_agent import _is_price_sane
 
-# Load from .env so SERPER_API_KEY is available
-load_dotenv('.env')
-
-from agents.search_agent import _extract_budget, _call_serper, _parse_serper_response
-
-budget = _extract_budget('gaming laptop under 30000')
-print('Budget detected:', budget)
-results = _call_serper('gaming laptop under 30000', max_price=budget)
-prices = [p['price'] for p in results]
-print('Prices returned:', prices)
-over_budget = [p for p in results if p['price'] > 30000]
-print('Over budget items (should be 0):', len(over_budget))
+tests = [
+    ('headphones', 1000.0,   None,    True),
+    ('headphones', 100.0,    None,    False),
+    ('headphones', 1000.0,   800.0,   False),
+    ('earbuds',    150.0,    None,    False),
+    ('laptop',     500.0,    None,    False),
+    ('laptop',     55000.0,  None,    True),
+    ('laptop',     55000.0,  30000.0, False),
+    ('phone',      2000.0,   None,    False),
+    ('phone',      15000.0,  None,    True),
+    ('speaker',    200.0,    None,    False),
+    ('watch',      400.0,    None,    False),
+]
+all_pass = True
+for cat, price, budget, expected in tests:
+    result = _is_price_sane(price, cat, budget)
+    ok = result == expected
+    if not ok:
+        all_pass = False
+    status = 'PASS' if ok else 'FAIL'
+    print(f'{status}  {cat:<12} Rs{price:<10,.0f} budget={str(budget):<10} -> {result}')
+print()
+print('All pass:', all_pass)

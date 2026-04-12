@@ -1,107 +1,212 @@
 'use client'
 
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { useEffect, useState } from 'react'
 import type { ScoredProduct } from '@/hooks/useAgentStream'
 
 interface ProductCardProps {
   product: ScoredProduct
   isWinner?: boolean
+  index?: number
+  /** Justification text shown only on the winner card */
+  justification?: string
 }
 
-function sourceColor(source: string): string {
-  const lower = source.toLowerCase()
-  if (lower.includes('amazon')) return 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300'
-  if (lower.includes('flipkart')) return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300'
-  return 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300'
+function sourceBadge(source: string) {
+  const s = source.toLowerCase()
+  if (s.includes('amazon'))
+    return {
+      bg: 'rgba(124,45,18,0.3)',
+      color: '#fb923c',
+      border: 'rgba(124,45,18,0.6)',
+    }
+  if (s.includes('flipkart'))
+    return {
+      bg: 'rgba(30,58,138,0.3)',
+      color: '#60a5fa',
+      border: 'rgba(30,58,138,0.6)',
+    }
+  return {
+    bg: 'rgba(39,39,42,0.6)',
+    color: '#a1a1aa',
+    border: 'rgba(63,63,70,0.6)',
+  }
 }
 
-function RatingStars({ rating }: { rating: number }) {
+function RatingStars({ rating, verified }: { rating: number; verified: boolean }) {
+  if (!verified || rating === 0) {
+    return (
+      <span className="text-xs" style={{ color: '#71717a' }}>
+        No rating
+      </span>
+    )
+  }
   const full = Math.floor(rating)
-  const half = rating - full >= 0.5
   return (
     <span className="flex items-center gap-0.5" aria-label={`Rating ${rating} out of 5`}>
-      {Array.from({ length: 5 }, (_, i) => {
-        if (i < full) return <span key={i} className="text-amber-400 text-sm">★</span>
-        if (i === full && half) return <span key={i} className="text-amber-400 text-sm opacity-60">★</span>
-        return <span key={i} className="text-gray-300 dark:text-gray-600 text-sm">★</span>
-      })}
-      <span className="ml-1 text-xs text-muted-foreground font-medium">{rating.toFixed(1)}</span>
+      {Array.from({ length: 5 }, (_, i) => (
+        <span
+          key={i}
+          className="text-sm"
+          style={{ color: i < full ? '#fbbf24' : '#3f3f46' }}
+        >
+          ★
+        </span>
+      ))}
+      <span className="ml-1 text-xs" style={{ color: '#71717a' }}>
+        {rating.toFixed(1)}
+      </span>
     </span>
   )
 }
 
-export function ProductCard({ product, isWinner = false }: ProductCardProps) {
-  const scorePercent = Math.round(product.score * 100)
+export function ProductCard({
+  product,
+  isWinner = false,
+  index = 0,
+  justification,
+}: ProductCardProps) {
+  const scorePercent = Math.round((product.score ?? 0) * 100)
+  const badge = sourceBadge(product.source)
+
+  // Animate score bar: start at 0, then jump to actual width after mount
+  const [barWidth, setBarWidth] = useState(0)
+  useEffect(() => {
+    const t = setTimeout(() => setBarWidth(scorePercent), 100 + index * 80)
+    return () => clearTimeout(t)
+  }, [scorePercent, index])
+
+  const winnerStyle = isWinner
+    ? {
+        border: '2px solid #7c3aed',
+        boxShadow: '0 0 28px rgba(124,58,237,0.18)',
+      }
+    : {
+        border: '1px solid #222',
+      }
 
   return (
-    <Card
-      className={`relative flex flex-col gap-0 overflow-hidden transition-shadow hover:shadow-lg ${
-        isWinner
-          ? 'border-2 border-blue-500 shadow-blue-100 dark:shadow-blue-900/30'
-          : 'border'
-      }`}
+    <div
+      className="animate-fade-in-up card-hover flex flex-col rounded-2xl p-5"
+      style={{
+        background: '#111',
+        animationDelay: `${index * 80}ms`,
+        ...winnerStyle,
+      }}
     >
-      {isWinner && (
-        <div className="absolute top-0 right-0">
-          <Badge
-            className="rounded-none rounded-bl-lg rounded-tr-none bg-blue-500 text-white text-xs px-2 py-0.5"
-          >
-            ✦ Recommended
-          </Badge>
-        </div>
-      )}
-
-      <CardHeader className="pb-2 pt-4 px-4">
-        <div className="flex items-start justify-between gap-2">
-          <a
-            href={product.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-semibold leading-snug hover:text-blue-600 dark:hover:text-blue-400 transition-colors line-clamp-3"
-          >
-            {product.title}
-          </a>
-        </div>
-
-        <Badge
-          variant="outline"
-          className={`mt-1 w-fit text-xs font-medium ${sourceColor(product.source)}`}
+      {/* ── Top row: source badge + winner badge ────────────────────────── */}
+      <div className="mb-3 flex items-center justify-between gap-2">
+        {/* Source pill */}
+        <span
+          className="rounded-full px-2.5 py-0.5 text-xs font-medium"
+          style={{
+            background: badge.bg,
+            color: badge.color,
+            border: `1px solid ${badge.border}`,
+          }}
         >
           {product.source}
-        </Badge>
-      </CardHeader>
+        </span>
 
-      <CardContent className="px-4 pb-4 flex flex-col gap-2 flex-1">
-        {/* Price */}
-        <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+        {/* Recommended badge (winner only) */}
+        {isWinner && (
+          <span
+            className="flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold"
+            style={{
+              background: 'rgba(109,40,217,0.2)',
+              color: '#c4b5fd',
+              border: '1px solid rgba(109,40,217,0.4)',
+            }}
+          >
+            ★ Recommended
+          </span>
+        )}
+      </div>
+
+      {/* ── Title ───────────────────────────────────────────────────────── */}
+      <h3
+        className="mb-1 line-clamp-2 text-sm font-semibold leading-snug"
+        style={{ color: '#f5f5f5' }}
+      >
+        {product.title}
+      </h3>
+
+      {/* View link */}
+      {product.link && product.link !== '#' && (
+        <a
+          href={product.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mb-3 text-xs transition-colors"
+          style={{ color: '#52525b' }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
+        >
+          View on {product.source} →
+        </a>
+      )}
+
+      {/* ── Price + rating ──────────────────────────────────────────────── */}
+      <div className="mt-auto flex flex-col gap-1.5">
+        <p className="text-xl font-bold" style={{ color: '#f5f5f5' }}>
           ₹{product.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
         </p>
 
-        {/* Rating */}
         <div className="flex items-center gap-2">
-          <RatingStars rating={product.rating} />
-          <span className="text-xs text-muted-foreground">
-            ({product.review_count.toLocaleString()} reviews)
+          {/* Show stars only when rating is verified/present */}
+          <RatingStars
+            rating={product.rating}
+            verified={product.rating_verified !== false && product.rating > 0}
+          />
+          {/* Show review count only when it's non-zero */}
+          {product.review_count > 0 ? (
+            <span className="text-xs" style={{ color: '#52525b' }}>
+              ({product.review_count.toLocaleString()} reviews)
+            </span>
+          ) : (
+            <span className="text-xs" style={{ color: '#3f3f46' }}>
+              Reviews unavailable
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ── Score bar ────────────────────────────────────────────────────── */}
+      <div className="mt-4">
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className="text-xs" style={{ color: '#52525b' }}>
+            Match score
+          </span>
+          <span className="text-xs font-semibold" style={{ color: '#a78bfa' }}>
+            {scorePercent}%
           </span>
         </div>
-
-        {/* Score bar */}
-        <div className="mt-auto pt-2">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-muted-foreground font-medium">AI Score</span>
-            <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
-              {scorePercent}%
-            </span>
-          </div>
-          <div className="h-1.5 w-full rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
-            <div
-              className="h-1.5 rounded-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all duration-700"
-              style={{ width: `${scorePercent}%` }}
-            />
-          </div>
+        <div
+          className="h-1.5 w-full overflow-hidden rounded-full"
+          style={{ background: '#222' }}
+        >
+          <div
+            className="score-bar-fill"
+            style={{ width: `${barWidth}%` }}
+          />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* ── Justification (winner only) ──────────────────────────────────── */}
+      {isWinner && justification && (
+        <div
+          className="mt-4 rounded-xl p-3 text-xs leading-relaxed"
+          style={{
+            background: 'rgba(109,40,217,0.08)',
+            border: '1px solid rgba(109,40,217,0.2)',
+            color: '#a1a1aa',
+          }}
+        >
+          <span className="mb-1 block text-xs font-semibold" style={{ color: '#a78bfa' }}>
+            AI Reasoning
+          </span>
+          {justification}
+        </div>
+      )}
+    </div>
   )
 }
