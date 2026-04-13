@@ -167,6 +167,49 @@ async def confirm_purchase(request: ConfirmRequest):
     )
 
 
+@router.post("/confirm/prepare")
+async def prepare_transaction(request: ConfirmRequest):
+    """
+    Build an unsigned transaction for Pera wallet signing.
+    Frontend calls this, gets txn_b64, passes to Pera,
+    then calls /confirm/submit with the signed result.
+    """
+    try:
+        from blockchain.algorand import build_unsigned_transaction
+
+        result = await asyncio.to_thread(build_unsigned_transaction, request.model_dump())
+        return {"success": True, **result}
+    except Exception as e:
+        logger.error(f"prepare_transaction error: {e}")
+        return {
+            "success": False,
+            "fallback": True,
+            "error": "Wallet signing unavailable — use direct confirm",
+        }
+
+
+@router.post("/confirm/submit")
+async def submit_transaction(signed_txn_b64: str, request: ConfirmRequest):
+    """
+    Accept a Pera-signed transaction and submit it to Algorand.
+    Also logs the purchase to history.
+    """
+    try:
+        from blockchain.algorand import submit_signed_transaction
+
+        result = await asyncio.to_thread(submit_signed_transaction, signed_txn_b64)
+        await asyncio.to_thread(
+            log_purchase,
+            request.user_id or "demo",
+            request.model_dump(),
+            result["tx_id"],
+        )
+        return {"success": True, **result}
+    except Exception as e:
+        logger.error(f"submit_transaction error: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # ── GET /api/history — purchase history ──────────────────────────────────────
 
 @router.get("/history")

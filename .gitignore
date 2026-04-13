@@ -62,3 +62,7 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Algorand compiled contract artifacts
+blockchain/compiled/
+*.teal
