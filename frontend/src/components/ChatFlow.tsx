@@ -11,6 +11,21 @@ interface ChatFlowProps {
 
 type FlowState = 'IDLE' | 'CLARIFYING' | 'SEARCHING'
 
+async function fetchJsonWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number = 12000
+) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(input, { ...init, signal: controller.signal })
+    return await res.json()
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
   const [flowState, setFlowState] = useState<FlowState>('IDLE')
   const [query, setQuery] = useState('')
@@ -48,12 +63,11 @@ export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
     setRevealedIdx(-1)
 
     try {
-      const res = await fetch(`${API}/api/clarify`, {
+      const data = await fetchJsonWithTimeout(`${API}/api/clarify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: q, user_id: 'demo' })
       })
-      const data = await res.json()
       
       if (data.needs_clarification && data.questions && data.questions.length > 0) {
         setQuestions(data.questions)
@@ -76,12 +90,11 @@ export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
     setIsEnriching(true)
     
     try {
-      const res = await fetch(`${API}/api/enrich`, {
+      const data = await fetchJsonWithTimeout(`${API}/api/enrich`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ original_query: query, answers })
       })
-      const data = await res.json()
       const finalQ = data.enriched_query || query
       triggerFinalSearch(finalQ)
     } catch {

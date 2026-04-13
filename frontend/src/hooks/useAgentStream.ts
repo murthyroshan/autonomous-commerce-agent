@@ -36,13 +36,20 @@ export function useAgentStream(query: string | null) {
   const [loading, setLoading] = useState(false)
   const [streamError, setStreamError] = useState<string | null>(null)
   const esRef = useRef<EventSource | null>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!query) return
+    let isActive = true
+    let usedFallback = false
 
     // Close any existing connection
     if (esRef.current) {
       esRef.current.close()
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
     }
 
     setLoading(true)
@@ -55,17 +62,69 @@ export function useAgentStream(query: string | null) {
     const es = new EventSource(url)
     esRef.current = es
 
+    const runFallbackSearch = async (reason: string) => {
+      if (usedFallback || !isActive) return
+      usedFallback = true
+      setStatus('Live stream interrupted. Retrying...')
+      try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 25000)
+        const res = await fetch(`${apiUrl}/api/search?user_id=demo`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query }),
+          signal: controller.signal,
+        })
+        clearTimeout(timeout)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (!isActive) return
+        setResult({
+          type: 'result',
+          query: data.query ?? query,
+          scored_products: data.scored_products ?? [],
+          recommendation: data.recommendation ?? null,
+          error: data.error ?? null,
+        })
+        setStreamError(reason)
+        setLoading(false)
+      } catch {
+        if (!isActive) return
+        setStreamError('Connection to agent server failed. Is the API running?')
+        setLoading(false)
+      }
+    }
+
+    const armTimeout = () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      timeoutRef.current = setTimeout(() => {
+        runFallbackSearch('Live stream timed out. Loaded fallback response.')
+        es.close()
+      }, 30000)
+    }
+
+    armTimeout()
+
     es.onmessage = (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data)
+        armTimeout()
         if (data.type === 'result') {
           setResult(data as StreamResult)
           setLoading(false)
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current)
+            timeoutRef.current = null
+          }
           es.close()
         } else if (data.type === 'error') {
           setStreamError(data.message)
           setStatus(data.message)
           setLoading(false)
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current)
+            timeoutRef.current = null
+          }
           es.close()
         } else if (data.type === 'status') {
           setStatus(data.message)
@@ -75,15 +134,23 @@ export function useAgentStream(query: string | null) {
       }
     }
 
-    es.onerror = (err) => {
+    es.onerror = () => {
       // EventSource doesn't give detailed errors, but if it fires, we lost connection or failed to connect.
-      setStreamError('Connection to agent server failed. Is the API running?')
-      setLoading(false)
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
       es.close()
+      runFallbackSearch('Live stream disconnected. Loaded fallback response.')
     }
 
     return () => {
+      isActive = false
       es.close()
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
     }
   }, [query])
 
