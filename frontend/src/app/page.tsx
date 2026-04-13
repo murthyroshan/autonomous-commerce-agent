@@ -7,10 +7,12 @@ import { ChatFlow } from '@/components/ChatFlow'
 import { StatusTicker } from '@/components/StatusTicker'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { ProductGrid } from '@/components/ProductGrid'
+import { usePeraWallet } from '@/hooks/usePeraWallet'
 
 export default function HomePage() {
   const [query, setQuery] = useState<string | null>(null)
   const { status, result, loading, streamError } = useAgentStream(query)
+  const { address, connected, connect, disconnect } = usePeraWallet()
 
   // Merge backend pipeline error with SSE transport error.
   // Don't surface "Mock mode — MOCK_ONLY=true" as a user-visible error.
@@ -20,6 +22,38 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col" style={{ background: '#0a0a0a' }}>
+      <header className="mx-auto flex w-full max-w-7xl items-center justify-end px-4 pt-4">
+        {!connected ? (
+          <button
+            onClick={() => {
+              void connect()
+            }}
+            className="rounded-md border px-3 py-1.5 text-xs transition-colors"
+            style={{ borderColor: '#333', color: '#a1a1aa', background: 'transparent' }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = '#7c3aed'
+              e.currentTarget.style.color = '#c4b5fd'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = '#333'
+              e.currentTarget.style.color = '#a1a1aa'
+            }}
+          >
+            Connect Pera
+          </button>
+        ) : (
+          <button
+            onClick={disconnect}
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs transition-colors"
+            style={{ borderColor: '#333', color: '#a1a1aa', background: 'transparent' }}
+            title="Disconnect wallet"
+          >
+            <span className="h-2 w-2 rounded-full" style={{ background: '#22c55e' }} />
+            {address ? `${address.slice(0, 6)}...` : 'Connected'}
+          </button>
+        )}
+      </header>
+
       {/* ── Hero ───────────────────────────────────────────────────────────── */}
       <section className="gradient-bg flex flex-col items-center justify-center px-4 pt-24 pb-16 text-center">
         {/* Pill badge */}

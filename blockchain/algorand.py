@@ -10,6 +10,7 @@ Uses AlgoNode free public testnet endpoint — no API key needed.
 import json
 import os
 import logging
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -85,4 +86,100 @@ def record_purchase_intent(product: dict, user_id: str = "demo") -> dict:
     return {
         "tx_id":        tx_id,
         "explorer_url": f"https://lora.algokit.io/testnet/transaction/{tx_id}",
+    }
+
+
+def compile_contract() -> bytes:
+    """
+    Compile the approval.teal file and return binary bytes.
+    Uses the Algod client compile endpoint.
+    """
+    client = _get_client()
+    teal_path = os.path.join(os.path.dirname(__file__), "compiled", "approval.teal")
+    with open(teal_path, encoding="utf-8") as f:
+        teal_source = f.read()
+    response = client.compile(teal_source)
+    return base64.b64decode(response["result"])
+
+
+def build_unsigned_transaction(product: dict) -> dict:
+    """
+    Build a payment transaction for user wallet signing.
+    Returns the transaction serialized as base64 for frontend wallet signing.
+
+    Returns:
+    {
+      "txn_b64":       str,
+      "note_preview":  str,
+      "amount_micro":  int,
+      "receiver":      str,
+    }
+    """
+    from algosdk import mnemonic, account, transaction, encoding
+
+    sender_mnemonic = os.getenv("ALGORAND_MNEMONIC")
+    if not sender_mnemonic:
+        raise ValueError("ALGORAND_MNEMONIC not set")
+
+    private_key = mnemonic.to_private_key(sender_mnemonic)
+    sender = account.address_from_private_key(private_key)
+    receiver = os.getenv("ALGORAND_RECEIVER", sender)
+
+    note_data = {
+        "app": "kartiq",
+        "product_id": product.get("link", "")[-30:],
+        "title": product.get("title", "")[:60],
+        "price_inr": product.get("price"),
+        "source": product.get("source"),
+        "score": product.get("score"),
+        "signed_by": "pera_wallet",
+    }
+    note = json.dumps(note_data).encode()
+
+    client = _get_client()
+    params = client.suggested_params()
+
+    txn = transaction.PaymentTxn(
+        sender=sender,
+        sp=params,
+        receiver=receiver,
+        amt=1,
+        note=note,
+    )
+
+    # SDK provides msgpack as base64 string; keep stable frontend contract by
+    # always returning standard base64 text payload.
+    encoded = encoding.msgpack_encode(txn)
+    if isinstance(encoded, str):
+        txn_b64 = encoded
+    else:
+        txn_b64 = base64.b64encode(encoded).decode("utf-8")
+
+    return {
+        "txn_b64": txn_b64,
+        "note_preview": f"Kartiq purchase: {product.get('title', '')[:40]}",
+        "amount_micro": 1,
+        "receiver": receiver,
+    }
+
+
+def submit_signed_transaction(signed_txn_b64: str) -> dict:
+    """
+    Accept a base64-encoded signed transaction from the frontend
+    and submit it to the network.
+
+    Returns: {"tx_id": str, "explorer_url": str}
+    """
+    from algosdk import transaction, encoding
+
+    client = _get_client()
+    signed_bytes = base64.b64decode(signed_txn_b64)
+    signed_txn = encoding.future_msgpack_decode(signed_bytes)
+    tx_id = client.send_transaction(signed_txn)
+
+    logger.info(f"Pera-signed tx submitted: {tx_id}")
+
+    return {
+        "tx_id": tx_id,
+        "explorer_url": f"https://testnet.algoexplorer.io/tx/{tx_id}",
     }
