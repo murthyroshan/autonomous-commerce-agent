@@ -1,169 +1,174 @@
-﻿'use client'
+'use client'
 
-import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import Link from 'next/link'
+import { SearchOrb } from '@/components/agent/SearchOrb'
+import { AgentTimeline } from '@/components/agent/AgentTimeline'
 import { useAgentStream } from '@/hooks/useAgentStream'
-import { ChatFlow } from '@/components/ChatFlow'
-import { StatusTicker } from '@/components/StatusTicker'
-import { ErrorBanner } from '@/components/ErrorBanner'
-import { ProductGrid } from '@/components/ProductGrid'
-import { usePeraWallet } from '@/hooks/usePeraWallet'
+import { useAppStore } from '@/stores/appStore'
+import { colors, transitions } from '@/design-system/tokens'
 
 export default function HomePage() {
-  const [query, setQuery] = useState<string | null>(null)
-  const { status, result, loading, streamError } = useAgentStream(query)
-  const { address, connected, connect, disconnect } = usePeraWallet()
+  const { search } = useAgentStream()
+  const { agentState, result, error, timelineEvents } = useAppStore()
 
-  const rawError = streamError ?? result?.error ?? null
-  const displayError =
-    rawError && !rawError.toLowerCase().includes('mock mode') ? rawError : null
+  const handleSearch = (query: string) => {
+    void search(query)
+  }
 
   return (
-    <div className="flex min-h-screen flex-col" style={{ background: '#0a0a09' }}>
-      <header className="mx-auto flex w-full max-w-7xl items-center justify-end px-4 pt-4">
-        {!connected ? (
-          <button
-            onClick={() => {
-              void connect()
-            }}
-            className="rounded-md border px-3 py-1.5 text-xs transition-colors"
-            style={{ borderColor: '#333', color: '#a1a1aa', background: 'transparent' }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#e8a045'
-              e.currentTarget.style.color = '#f0bc75'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#333'
-              e.currentTarget.style.color = '#a1a1aa'
-            }}
-          >
-            Connect Pera
-          </button>
-        ) : (
-          <button
-            onClick={disconnect}
-            className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs transition-colors"
-            style={{ borderColor: '#333', color: '#a1a1aa', background: 'transparent' }}
-            title="Disconnect wallet"
-          >
-            <span className="h-2 w-2 rounded-full" style={{ background: '#22c55e' }} />
-            {address ? `${address.slice(0, 6)}...` : 'Connected'}
-          </button>
-        )}
-      </header>
-
-      <section className="flex flex-col items-center justify-center px-4 pt-24 pb-16 text-center">
-        <div
-          className="mb-6 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium"
-          style={{
-            borderColor: 'rgba(232,160,69,0.35)',
-            background: 'rgba(232,160,69,0.12)',
-            color: '#e8a045',
-          }}
+    <main className="min-h-screen flex flex-col noise scanlines">
+      <nav
+        className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between border-b px-6 py-4 backdrop-blur-xl"
+        style={{
+          borderColor: colors.border.subtle,
+          background: colors.bg.overlay,
+        }}
+      >
+        <span
+          className="font-display text-[18px] font-[600] tracking-[-0.02em]"
+          style={{ color: colors.text.primary }}
         >
-          <span style={{ color: '#e8a045' }}>âœ¦</span>
-          Powered by Groq + Serper
-        </div>
-
-        <h1
-          className="mb-3 text-5xl font-extrabold tracking-tight sm:text-6xl"
-          style={{ color: '#f5f5f5', letterSpacing: '-0.03em' }}
-        >
-          Find the best product.
-        </h1>
-
-        <p className="mb-10 max-w-md text-base" style={{ color: '#71717a' }}>
-          Describe what you want. The agent does the rest.
-        </p>
-
-        <ChatFlow onSearch={setQuery} disabled={loading} />
-
-        <div className="mt-5 flex w-full max-w-2xl flex-col items-center gap-3">
-          <StatusTicker status={status} loading={loading} />
-          <ErrorBanner error={displayError} />
-        </div>
-      </section>
-
-      {result?.scored_products && result.scored_products.length > 0 && (
-        <section className="flex-1 px-4 pb-20 pt-10 max-w-7xl mx-auto w-full">
-          <ProductGrid
-            products={result.scored_products}
-            recommendation={result.recommendation}
-          />
-        </section>
-      )}
-
-      {!query && !loading && (
-        <div className="flex flex-1 flex-col items-center justify-center pb-32 text-center px-4">
-          <div
-            className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl text-4xl"
-            style={{
-              background: 'rgba(232,160,69,0.08)',
-              border: '1px solid rgba(232,160,69,0.2)',
-            }}
-          >
-            ðŸ›ï¸
-          </div>
-          <p className="text-sm mb-1" style={{ color: '#52525b' }}>
-            Try searching for something like:
-          </p>
-          <div className="flex flex-wrap justify-center gap-2 mt-2">
-            {[
-              'gaming laptop under â‚¹80,000',
-              'wireless earbuds under â‚¹5,000',
-              'smartwatch under â‚¹10,000',
-              '4K TV under â‚¹40,000',
-            ].map((ex) => (
-              <button
-                key={ex}
-                onClick={() => setQuery(ex)}
-                className="rounded-full border px-3 py-1.5 text-xs transition-colors cursor-pointer"
-                style={{
-                  borderColor: '#222',
-                  color: '#71717a',
-                  background: 'transparent',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#e8a045'
-                  e.currentTarget.style.color = '#e8a045'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#222'
-                  e.currentTarget.style.color = '#71717a'
-                }}
-              >
-                {ex}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <footer className="py-8 text-center text-xs flex flex-col items-center gap-2" style={{ color: '#3f3f46' }}>
-        <div className="flex items-center gap-4">
+          Kartiq
+        </span>
+        <div className="flex items-center gap-6">
           <Link
             href="/history"
-            className="transition-colors"
-            style={{ color: '#52525b' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#e8a045')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
+            className="text-[13px] transition-colors"
+            style={{ color: colors.text.secondary }}
           >
-            History â†’
+            History
           </Link>
-          <span style={{ color: '#2a2a2a' }}>Â·</span>
           <Link
-            href="/history#watchlist"
-            className="transition-colors"
-            style={{ color: '#52525b' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#e8a045')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
+            href="/watchlist"
+            className="text-[13px] transition-colors"
+            style={{ color: colors.text.secondary }}
           >
-            Watchlist â†’
+            Watchlist
+          </Link>
+          <Link
+            href="/landing"
+            className="text-[13px] transition-colors"
+            style={{ color: colors.text.secondary }}
+          >
+            About
           </Link>
         </div>
-        <span>Kartiq Â· Built with FastAPI, Groq, Serper &amp; Algorand</span>
+      </nav>
+
+      <section className="flex-1 flex flex-col items-center justify-center px-6 pt-24 pb-16 gap-12">
+        <AnimatePresence>
+          {agentState === 'idle' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -10, filter: 'blur(2px)' }}
+              transition={transitions.spring}
+              className="text-center space-y-3"
+            >
+              <div
+                className="mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em]"
+                style={{
+                  borderColor: colors.border.default,
+                  background: 'rgba(255,255,255,0.03)',
+                  color: colors.text.secondary,
+                }}
+              >
+                <span
+                  className="inline-block h-1.5 w-1.5 animate-pulse rounded-full"
+                  style={{ background: colors.accent.cyan }}
+                />
+                Powered by Groq · Serper · Algorand
+              </div>
+              <h1
+                className="font-display text-[52px] font-[600] leading-[1.1] tracking-[-0.04em]"
+                style={{ color: colors.text.primary }}
+              >
+                Your AI that shops
+                <br />
+                <span style={{ color: colors.accent.amber }}>smarter than you.</span>
+              </h1>
+              <p
+                className="mx-auto max-w-md text-[16px] leading-relaxed tracking-[-0.01em]"
+                style={{ color: colors.text.secondary }}
+              >
+                Describe what you want. The agent searches, compares, scores, and
+                decides in seconds.
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="w-full max-w-2xl">
+          <SearchOrb onSearch={handleSearch} />
+        </div>
+
+        <AnimatePresence>{timelineEvents.length > 0 && <AgentTimeline />}</AnimatePresence>
+
+        <AnimatePresence>
+          {result && (
+            <motion.div
+              initial={{ opacity: 0, y: 20, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              transition={transitions.spring}
+              className="w-full max-w-6xl"
+              id="results"
+            >
+              <p
+                className="text-center font-mono text-sm"
+                style={{ color: colors.text.secondary }}
+              >
+                {result.scored_products.length} products found. ProductGrid coming in
+                Part 3.
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, filter: 'blur(0px)' }}
+              transition={transitions.spring}
+              className="w-full max-w-2xl rounded-xl border px-4 py-3 text-center font-mono text-[13px]"
+              style={{
+                background: 'rgba(255,77,77,0.08)',
+                borderColor: 'rgba(255,77,77,0.2)',
+                color: colors.accent.red,
+              }}
+            >
+              {error}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </section>
+
+      <footer
+        className="flex items-center justify-between border-t px-6 py-6 font-mono text-[12px]"
+        style={{
+          borderColor: colors.border.subtle,
+          color: colors.text.muted,
+        }}
+      >
+        <span>Kartiq © 2025</span>
+        <div className="flex gap-6">
+          <Link href="/history" className="transition-colors hover:text-[#888884]">
+            History
+          </Link>
+          <Link href="/watchlist" className="transition-colors hover:text-[#888884]">
+            Watchlist
+          </Link>
+          <a
+            href="https://github.com/yourusername/kartiq"
+            target="_blank"
+            className="transition-colors hover:text-[#888884]"
+            rel="noreferrer"
+          >
+            GitHub
+          </a>
+        </div>
       </footer>
-    </div>
+    </main>
   )
 }
-
