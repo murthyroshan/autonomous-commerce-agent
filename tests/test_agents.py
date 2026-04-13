@@ -161,6 +161,37 @@ class TestCompareAgent:
         # 100.0 is most expensive → after invert should be lowest (0.0)
         assert normed[0] == 0.0
 
+    def test_exact_model_beats_variant(self):
+        products = [
+            {"title": "OnePlus 13 5G 12GB 256GB",
+             "price": 69999.0, "rating": 4.5,
+             "review_count": 2000, "source": "Amazon", "link": "#"},
+            {"title": "OnePlus 13R 5G 8GB 128GB",
+             "price": 35999.0, "rating": 4.4,
+             "review_count": 15000, "source": "Amazon", "link": "#"},
+            {"title": "OnePlus 13s 5G 8GB 128GB",
+             "price": 29999.0, "rating": 4.3,
+             "review_count": 8000, "source": "Amazon", "link": "#"},
+        ]
+        state: AgentState = {
+            "query": "oneplus 13",
+            "search_results": products,
+            "scored_products": [],
+            "recommendation": {},
+            "error": None,
+        }
+        result = compare_agent(state, user_id="test_no_prefs")
+        winner = result["scored_products"][0]["title"]
+        assert "OnePlus 13 5G" in winner, f"Exact model should win. Got: {winner}"
+
+    def test_relevance_score_function(self):
+        from agents.compare_agent import _relevance_score
+        assert _relevance_score("OnePlus 13 5G 12GB", "oneplus 13") > 0.7
+        assert _relevance_score("OnePlus 13R 5G 8GB", "oneplus 13") < 0.7
+        assert _relevance_score("OnePlus 13s 5G", "oneplus 13") < 0.7
+        assert _relevance_score("Samsung Galaxy S24", "oneplus 13") < 0.3
+        assert _relevance_score("Sony WH-1000XM5 Headphones", "sony headphones") > 0.5
+
 
 # ── Decision Agent tests ──────────────────────────────────────────────────────
 

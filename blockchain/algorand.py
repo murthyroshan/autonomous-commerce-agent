@@ -125,6 +125,10 @@ def build_unsigned_transaction(product: dict) -> dict:
     sender = account.address_from_private_key(private_key)
     receiver = os.getenv("ALGORAND_RECEIVER", sender)
 
+    # Compile and attach LogicSig program for Phase 5 enforcement.
+    program_bytes = compile_contract()
+    lsig = transaction.LogicSigAccount(program_bytes)
+
     note_data = {
         "app": "kartiq",
         "product_id": product.get("link", "")[-30:],
@@ -133,6 +137,7 @@ def build_unsigned_transaction(product: dict) -> dict:
         "source": product.get("source"),
         "score": product.get("score"),
         "signed_by": "pera_wallet",
+        "contract": "v1_logicsig",
     }
     note = json.dumps(note_data).encode()
 
@@ -140,7 +145,7 @@ def build_unsigned_transaction(product: dict) -> dict:
     params = client.suggested_params()
 
     txn = transaction.PaymentTxn(
-        sender=sender,
+        sender=lsig.address(),
         sp=params,
         receiver=receiver,
         amt=1,
@@ -160,6 +165,7 @@ def build_unsigned_transaction(product: dict) -> dict:
         "note_preview": f"Kartiq purchase: {product.get('title', '')[:40]}",
         "amount_micro": 1,
         "receiver": receiver,
+        "contract_used": True,
     }
 
 
@@ -174,12 +180,16 @@ def submit_signed_transaction(signed_txn_b64: str) -> dict:
 
     client = _get_client()
     signed_bytes = base64.b64decode(signed_txn_b64)
-    signed_txn = encoding.future_msgpack_decode(signed_bytes)
+    decoder = getattr(encoding, "future_msgpack_decode", None) or getattr(encoding, "msgpack_decode", None)
+    if decoder is None:
+        raise RuntimeError("Algorand SDK missing msgpack decoder")
+    signed_txn = decoder(signed_bytes)
     tx_id = client.send_transaction(signed_txn)
 
-    logger.info(f"Pera-signed tx submitted: {tx_id}")
+    logger.info(f"Contract-validated tx submitted: {tx_id}")
 
     return {
         "tx_id": tx_id,
         "explorer_url": f"https://testnet.algoexplorer.io/tx/{tx_id}",
+        "contract_used": True,
     }

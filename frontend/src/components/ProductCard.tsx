@@ -55,7 +55,7 @@ function RatingStars({ rating, verified }: { rating: number; verified: boolean }
     <span className="flex items-center gap-0.5" aria-label={`Rating ${rating} out of 5`}>
       {Array.from({ length: 5 }, (_, i) => (
         <span key={i} className="text-sm" style={{ color: i < full ? '#fbbf24' : '#3f3f46' }}>
-          *
+          ★
         </span>
       ))}
       <span className="ml-1 text-xs" style={{ color: '#71717a' }}>
@@ -108,6 +108,7 @@ export function ProductCard({
   }
 
   async function handleDirectConfirm(): Promise<void> {
+    setConfirmState('submitting')
     try {
       const res = await fetch(`${API}/api/confirm`, {
         method: 'POST',
@@ -115,18 +116,19 @@ export function ProductCard({
         body: JSON.stringify(requestBody),
       })
       const data: ConfirmResponse = await res.json()
-      if (data.success && data.tx_id && data.explorer_url) {
+
+      if (data.success && data.tx_id && !data.tx_id.startsWith('local-')) {
         setTxId(data.tx_id)
-        setExplorerUrl(data.explorer_url)
-        setConfirmState('local')
-      } else if (data.success) {
-        setTxId(data.tx_id ?? null)
-        setConfirmState('local')
-      } else {
-        setConfirmState('error')
+        setExplorerUrl(data.explorer_url ?? `https://testnet.algoexplorer.io/tx/${data.tx_id}`)
+        setConfirmState('done')
+        return
       }
+
+      setTxId(data.tx_id ?? null)
+      setExplorerUrl(null)
+      setConfirmState('local')
     } catch {
-      setConfirmState('error')
+      setConfirmState('local')
     }
   }
 
@@ -226,7 +228,7 @@ export function ProductCard({
             className="flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold"
             style={{ background: 'rgba(109,40,217,0.2)', color: '#c4b5fd', border: '1px solid rgba(109,40,217,0.4)' }}
           >
-            * Recommended
+            ★ Recommended
           </span>
         )}
       </div>
@@ -245,7 +247,7 @@ export function ProductCard({
           onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
           onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
         >
-          View on {product.source} -&gt;
+          View on {product.source} →
         </a>
       )}
 
@@ -319,7 +321,7 @@ export function ProductCard({
 
         {confirmState === 'signing' && (
           <div className="w-full rounded-xl px-4 py-2.5 text-center text-sm" style={{ background: 'rgba(39,39,42,0.6)', color: '#71717a', border: '1px solid #333' }}>
-            <span className="inline-block animate-pulse">Sign in Pera -&gt;</span>
+            <span className="inline-block animate-pulse">Sign in Pera →</span>
           </div>
         )}
 

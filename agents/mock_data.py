@@ -74,6 +74,22 @@ MOCK_PRODUCTS: dict[str, list[dict]] = {
             "link": "https://www.amazon.in/dp/B0C003",
         },
         {
+            "title": "OnePlus 13 5G (16GB/512GB, Snapdragon 8 Elite)",
+            "price": 69999.0,
+            "rating": 4.6,
+            "review_count": 4200,
+            "source": "OnePlus Official Store",
+            "link": "https://www.oneplus.in/13",
+        },
+        {
+            "title": "OnePlus 13R 5G (8GB/128GB, Snapdragon 8 Gen 3)",
+            "price": 42999.0,
+            "rating": 4.4,
+            "review_count": 8900,
+            "source": "Amazon",
+            "link": "https://www.amazon.in/oneplus-13r",
+        },
+        {
             "title": "iQOO Z9 5G (12GB/256GB, Dimensity 7200)",
             "price": 22999.0,
             "rating": 4.4,

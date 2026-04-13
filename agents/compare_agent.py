@@ -25,15 +25,17 @@ Phase 6 additions:
 import logging
 import math
 import statistics
+import re
 from .state import AgentState
 from .memory import load_prefs
 
 logger = logging.getLogger(__name__)
 
 WEIGHTS = {
-    "price":        0.45,
-    "rating":       0.35,
-    "review_count": 0.20,
+    "price":        0.38,
+    "rating":       0.28,
+    "review_count": 0.16,
+    "relevance":    0.18,
 }
 
 NEUTRAL_RATING   = 2.5
@@ -148,6 +150,39 @@ def _detect_price_anomaly(
     return deviation > ANOMALY_THRESHOLD, round(deviation * 100, 1), round(median, 2)
 
 
+def _relevance_score(title: str, query: str) -> float:
+    """
+    Score how well a product title matches the user's query (0.0 to 1.0).
+    """
+    def tokenize(text: str) -> list[str]:
+        return re.findall(r"[a-zA-Z0-9]+", text.lower())
+
+    query_tokens = tokenize(query)
+    title_tokens = tokenize(title)
+    title_text = title.lower()
+    query_text = query.lower().strip()
+
+    if not query_tokens:
+        return 0.5
+
+    # Exact ordered token phrase match only (word boundaries required).
+    query_phrase_pattern = r"\b" + r"\s+".join(re.escape(t) for t in query_tokens) + r"\b"
+    if query_text and re.search(query_phrase_pattern, title_text):
+        return 1.0
+
+    matched = sum(1 for t in query_tokens if t in title_tokens)
+    overlap = matched / len(query_tokens)
+
+    last_token = query_tokens[-1]
+    if last_token.isdigit() or re.match(r"^[a-z]?\d+[a-z]?$", last_token):
+        exact_word = re.search(rf"\b{re.escape(last_token)}\b", title_text)
+        variant = re.search(rf"\b{re.escape(last_token)}[a-z]+\b", title_text)
+        if variant and not exact_word:
+            overlap *= 0.6
+
+    return round(min(overlap, 1.0), 4)
+
+
 def compare_agent(state: AgentState, user_id: str = "demo") -> dict:
     """
     Score and rank all products in state["search_results"].
@@ -198,8 +233,18 @@ def compare_agent(state: AgentState, user_id: str = "demo") -> dict:
     price_scores  = _normalize(prices, invert=True)
     rating_scores = _normalize(ratings)
     review_scores = _log_normalize(reviews)  # Feature 1.1: log normalization
+    if len(products) == 1:
+        relevance_scores = [1.0]
+    else:
+        relevance_scores = [
+            _relevance_score(p.get("title", ""), state.get("query", ""))
+            for p in products
+        ]
 
     all_prices = prices  # alias for anomaly detection
+    query_text = state.get("query", "")
+    query_tokens = re.findall(r"[a-zA-Z0-9]+", query_text.lower())
+    has_model_token = any(any(ch.isdigit() for ch in tok) for tok in query_tokens)
 
     # ── Scoring loop ──────────────────────────────────────────────────────────
     scored = []
@@ -208,8 +253,14 @@ def compare_agent(state: AgentState, user_id: str = "demo") -> dict:
         base = (
             WEIGHTS["price"]        * price_scores[i] +
             WEIGHTS["rating"]       * rating_scores[i] +
-            WEIGHTS["review_count"] * review_scores[i]
+            WEIGHTS["review_count"] * review_scores[i] +
+            WEIGHTS["relevance"]    * relevance_scores[i]
         )
+
+        # Strongly prefer exact model matches for model-specific queries
+        # (e.g., "oneplus 13" should outrank "oneplus 13r").
+        if has_model_token and relevance_scores[i] >= 0.999:
+            base += 0.25
 
         # Step 2: anomaly check
         suspicious, dev_pct, median_p = _detect_price_anomaly(
@@ -264,11 +315,13 @@ def compare_agent(state: AgentState, user_id: str = "demo") -> dict:
             # Cap at 1.0: trust/boost multipliers can exceed 1.0 but
             # relative ordering is preserved; existing tests expect [0, 1].
             "score":          min(1.0, round(base, 4)),
+            "relevance_score": relevance_scores[i],
             "rating_verified": rating_verified,
             "score_breakdown": {
                 "price_score":  round(price_scores[i], 4),
                 "rating_score": round(rating_scores[i], 4),
                 "review_score": round(review_scores[i], 4),
+                "relevance_score": round(relevance_scores[i], 4),
             }
         }
         scored.append(scored_product)

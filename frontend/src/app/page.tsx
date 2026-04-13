@@ -14,8 +14,6 @@ export default function HomePage() {
   const { status, result, loading, streamError } = useAgentStream(query)
   const { address, connected, connect, disconnect } = usePeraWallet()
 
-  // Merge backend pipeline error with SSE transport error.
-  // Don't surface "Mock mode — MOCK_ONLY=true" as a user-visible error.
   const rawError = streamError ?? result?.error ?? null
   const displayError =
     rawError && !rawError.toLowerCase().includes('mock mode') ? rawError : null
@@ -54,9 +52,7 @@ export default function HomePage() {
         )}
       </header>
 
-      {/* ── Hero ───────────────────────────────────────────────────────────── */}
       <section className="gradient-bg flex flex-col items-center justify-center px-4 pt-24 pb-16 text-center">
-        {/* Pill badge */}
         <div
           className="mb-6 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium"
           style={{
@@ -69,7 +65,6 @@ export default function HomePage() {
           Powered by Groq + Serper
         </div>
 
-        {/* Heading */}
         <h1
           className="mb-3 text-5xl font-extrabold tracking-tight sm:text-6xl"
           style={{ color: '#f5f5f5', letterSpacing: '-0.03em' }}
@@ -77,22 +72,18 @@ export default function HomePage() {
           Find the best product.
         </h1>
 
-        {/* Subheading */}
         <p className="mb-10 max-w-md text-base" style={{ color: '#71717a' }}>
           Describe what you want. The agent does the rest.
         </p>
 
-        {/* Chat flow for search & clarification */}
         <ChatFlow onSearch={setQuery} disabled={loading} />
 
-        {/* Status + error */}
         <div className="mt-5 flex w-full max-w-2xl flex-col items-center gap-3">
           <StatusTicker status={status} loading={loading} />
           <ErrorBanner error={displayError} />
         </div>
       </section>
 
-      {/* ── Results ────────────────────────────────────────────────────────── */}
       {result?.scored_products && result.scored_products.length > 0 && (
         <section className="flex-1 px-4 pb-20 pt-10 max-w-7xl mx-auto w-full">
           <ProductGrid
@@ -102,7 +93,6 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── Empty state ────────────────────────────────────────────────────── */}
       {!query && !loading && (
         <div className="flex flex-1 flex-col items-center justify-center pb-32 text-center px-4">
           <div
@@ -149,15 +139,14 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer className="py-8 text-center text-xs flex flex-col items-center gap-2" style={{ color: '#3f3f46' }}>
         <div className="flex items-center gap-4">
           <Link
             href="/history"
             className="transition-colors"
             style={{ color: '#52525b' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#52525b')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
           >
             History →
           </Link>
@@ -166,8 +155,8 @@ export default function HomePage() {
             href="/history#watchlist"
             className="transition-colors"
             style={{ color: '#52525b' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#52525b')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
           >
             Watchlist →
           </Link>

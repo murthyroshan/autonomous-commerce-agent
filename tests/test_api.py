@@ -94,3 +94,56 @@ class TestConfirmEndpoint:
         })
         assert r.status_code == 200
         assert r.json()["success"] is True
+
+
+class TestPhase5Endpoints:
+    def test_prepare_endpoint_returns_txn_b64(self):
+        """prepare returns txn_b64 or graceful fallback"""
+        r = client.post("/api/confirm/prepare", json={
+            "title": "Sony WH-1000XM4",
+            "price": 24990.0,
+            "source": "Amazon",
+            "link": "https://amazon.in/test",
+            "score": 0.87,
+        })
+        assert r.status_code == 200
+        body = r.json()
+        assert "success" in body
+        if body["success"]:
+            assert "txn_b64" in body
+            assert len(body["txn_b64"]) > 10
+        else:
+            assert body.get("fallback") is True
+
+    def test_prepare_endpoint_does_not_crash_without_mnemonic(self):
+        """Without ALGORAND_MNEMONIC, prepare returns fallback not 500"""
+        original = os.environ.pop("ALGORAND_MNEMONIC", None)
+        try:
+            r = client.post("/api/confirm/prepare", json={
+                "title": "Test",
+                "price": 100.0,
+                "source": "Amazon",
+                "link": "#",
+                "score": 0.5,
+            })
+            assert r.status_code == 200
+            assert r.json().get("success") is False
+            assert r.json().get("fallback") is True
+        finally:
+            if original:
+                os.environ["ALGORAND_MNEMONIC"] = original
+
+    def test_submit_endpoint_exists_and_accepts_post(self):
+        """submit endpoint exists — returns 200 or 422 (not 404/500)"""
+        r = client.post(
+            "/api/confirm/submit",
+            params={"signed_txn_b64": "dGVzdA=="},
+            json={
+                "title": "Test",
+                "price": 100.0,
+                "source": "Amazon",
+                "link": "#",
+                "score": 0.5,
+            }
+        )
+        assert r.status_code in (200, 422)
