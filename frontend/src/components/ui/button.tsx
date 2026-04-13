@@ -1,58 +1,71 @@
-import { Button as ButtonPrimitive } from "@base-ui/react/button"
-import { cva, type VariantProps } from "class-variance-authority"
+'use client'
+import { motion, HTMLMotionProps } from 'framer-motion'
+import { forwardRef } from 'react'
+import { transitions } from '@/design-system/tokens'
 
-import { cn } from "@/lib/utils"
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
+type Size = 'sm' | 'md' | 'lg'
 
-const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
-        outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
-        ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
-        destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-      size: {
-        default:
-          "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        icon: "size-8",
-        "icon-xs":
-          "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm":
-          "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
-        "icon-lg": "size-9",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  }
-)
-
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
-  return (
-    <ButtonPrimitive
-      data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  )
+interface ButtonProps extends Omit<HTMLMotionProps<'button'>, 'size'> {
+  variant?: Variant
+  size?: Size
+  loading?: boolean
+  icon?: React.ReactNode
 }
 
-export { Button, buttonVariants }
+const styles: Record<Variant, string> = {
+  primary: 'bg-[#e8a045] text-[#0a0a09] font-medium hover:bg-[#f0ae52]',
+  secondary:
+    'bg-[rgba(255,255,255,0.06)] text-[#f2f2f0] border border-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.09)]',
+  ghost:
+    'bg-transparent text-[#888884] hover:text-[#f2f2f0] hover:bg-[rgba(255,255,255,0.04)]',
+  danger:
+    'bg-[rgba(255,77,77,0.12)] text-[#ff4d4d] border border-[rgba(255,77,77,0.2)] hover:bg-[rgba(255,77,77,0.18)]',
+}
+
+const sizes: Record<Size, string> = {
+  sm: 'h-7 px-3 text-[12px] rounded-[6px]',
+  md: 'h-9 px-4 text-[13px] rounded-[8px]',
+  lg: 'h-11 px-6 text-[14px] rounded-[10px]',
+}
+
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  (
+    { variant = 'secondary', size = 'md', loading, icon, children, className = '', disabled, ...props },
+    ref
+  ) => {
+    return (
+      <motion.button
+        ref={ref}
+        whileTap={{ scale: 0.97 }}
+        transition={transitions.springFast}
+        disabled={disabled || loading}
+        className={`
+          inline-flex items-center justify-center gap-2
+          font-[500] tracking-[-0.01em] cursor-pointer
+          transition-colors duration-[80ms]
+          disabled:opacity-40 disabled:cursor-not-allowed
+          select-none outline-none
+          focus-visible:ring-2 focus-visible:ring-[#e8a045]
+          focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a09]
+          ${styles[variant]} ${sizes[size]} ${className}
+        `}
+        {...props}
+      >
+        {loading ? (
+          <span className="dot-pulse flex items-center gap-0">
+            <span />
+            <span />
+            <span />
+          </span>
+        ) : (
+          <>
+            {icon && <span className="w-4 h-4">{icon}</span>}
+            {children}
+          </>
+        )}
+      </motion.button>
+    )
+  }
+)
+Button.displayName = 'Button'

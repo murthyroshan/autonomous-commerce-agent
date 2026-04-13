@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, type FormEvent, type KeyboardEvent } from 'react'
 
@@ -36,8 +36,8 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
       aria-label="Product search form"
       onFocus={(e) => {
         const form = e.currentTarget
-        form.style.boxShadow = '0 0 0 2px rgba(124,58,237,0.5)'
-        form.style.borderColor = '#7c3aed'
+        form.style.boxShadow = '0 0 0 2px rgba(232,160,69,0.45)'
+        form.style.borderColor = '#e8a045'
       }}
       onBlur={(e) => {
         // only remove focus ring when focus leaves the form entirely
@@ -54,14 +54,14 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Find the best gaming laptop under ₹80,000..."
+        placeholder="Find the best gaming laptop under â‚¹80,000..."
         disabled={loading}
         autoComplete="off"
         aria-label="Search query"
         className="flex-1 bg-transparent px-5 py-3.5 text-sm outline-none"
         style={{
           color: '#f5f5f5',
-          caretColor: '#7c3aed',
+          caretColor: '#e8a045',
         }}
       />
 
@@ -71,7 +71,7 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
         disabled={loading || !value.trim()}
         className="flex items-center gap-2 px-6 py-3.5 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         style={{
-          background: '#7c3aed',
+          background: '#e8a045',
           color: '#fff',
           borderLeft: '1px solid rgba(255,255,255,0.08)',
           minWidth: '110px',
@@ -79,11 +79,11 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
         }}
         onMouseEnter={(e) => {
           if (!loading && value.trim()) {
-            e.currentTarget.style.background = '#6d28d9'
+            e.currentTarget.style.background = '#c68634'
           }
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = '#7c3aed'
+          e.currentTarget.style.background = '#e8a045'
         }}
       >
         {loading ? (
@@ -110,7 +110,7 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
                 strokeLinecap="round"
               />
             </svg>
-            Searching…
+            Searchingâ€¦
           </>
         ) : (
           'Search'
@@ -119,3 +119,4 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
     </form>
   )
 }
+

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -19,7 +19,7 @@ export default function HomePage() {
     rawError && !rawError.toLowerCase().includes('mock mode') ? rawError : null
 
   return (
-    <div className="flex min-h-screen flex-col" style={{ background: '#0a0a0a' }}>
+    <div className="flex min-h-screen flex-col" style={{ background: '#0a0a09' }}>
       <header className="mx-auto flex w-full max-w-7xl items-center justify-end px-4 pt-4">
         {!connected ? (
           <button
@@ -29,8 +29,8 @@ export default function HomePage() {
             className="rounded-md border px-3 py-1.5 text-xs transition-colors"
             style={{ borderColor: '#333', color: '#a1a1aa', background: 'transparent' }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#7c3aed'
-              e.currentTarget.style.color = '#c4b5fd'
+              e.currentTarget.style.borderColor = '#e8a045'
+              e.currentTarget.style.color = '#f0bc75'
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = '#333'
@@ -52,16 +52,16 @@ export default function HomePage() {
         )}
       </header>
 
-      <section className="gradient-bg flex flex-col items-center justify-center px-4 pt-24 pb-16 text-center">
+      <section className="flex flex-col items-center justify-center px-4 pt-24 pb-16 text-center">
         <div
           className="mb-6 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium"
           style={{
-            borderColor: 'rgba(124,58,237,0.4)',
-            background: 'rgba(124,58,237,0.1)',
-            color: '#a78bfa',
+            borderColor: 'rgba(232,160,69,0.35)',
+            background: 'rgba(232,160,69,0.12)',
+            color: '#e8a045',
           }}
         >
-          <span style={{ color: '#7c3aed' }}>✦</span>
+          <span style={{ color: '#e8a045' }}>âœ¦</span>
           Powered by Groq + Serper
         </div>
 
@@ -98,21 +98,21 @@ export default function HomePage() {
           <div
             className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl text-4xl"
             style={{
-              background: 'rgba(124,58,237,0.08)',
-              border: '1px solid rgba(124,58,237,0.2)',
+              background: 'rgba(232,160,69,0.08)',
+              border: '1px solid rgba(232,160,69,0.2)',
             }}
           >
-            🛍️
+            ðŸ›ï¸
           </div>
           <p className="text-sm mb-1" style={{ color: '#52525b' }}>
             Try searching for something like:
           </p>
           <div className="flex flex-wrap justify-center gap-2 mt-2">
             {[
-              'gaming laptop under ₹80,000',
-              'wireless earbuds under ₹5,000',
-              'smartwatch under ₹10,000',
-              '4K TV under ₹40,000',
+              'gaming laptop under â‚¹80,000',
+              'wireless earbuds under â‚¹5,000',
+              'smartwatch under â‚¹10,000',
+              '4K TV under â‚¹40,000',
             ].map((ex) => (
               <button
                 key={ex}
@@ -124,8 +124,8 @@ export default function HomePage() {
                   background: 'transparent',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#7c3aed'
-                  e.currentTarget.style.color = '#a78bfa'
+                  e.currentTarget.style.borderColor = '#e8a045'
+                  e.currentTarget.style.color = '#e8a045'
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = '#222'
@@ -145,24 +145,25 @@ export default function HomePage() {
             href="/history"
             className="transition-colors"
             style={{ color: '#52525b' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#e8a045')}
             onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
           >
-            History →
+            History â†’
           </Link>
-          <span style={{ color: '#2a2a2a' }}>·</span>
+          <span style={{ color: '#2a2a2a' }}>Â·</span>
           <Link
             href="/history#watchlist"
             className="transition-colors"
             style={{ color: '#52525b' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#e8a045')}
             onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
           >
-            Watchlist →
+            Watchlist â†’
           </Link>
         </div>
-        <span>Kartiq · Built with FastAPI, Groq, Serper &amp; Algorand</span>
+        <span>Kartiq Â· Built with FastAPI, Groq, Serper &amp; Algorand</span>
       </footer>
     </div>
   )
 }
+

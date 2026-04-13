@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState, type FormEvent } from 'react'
 import type { ScoredProduct } from '@/hooks/useAgentStream'
@@ -36,7 +36,7 @@ function sourceBadge(source: string) {
     return { bg: 'rgba(124,45,18,0.3)', color: '#fb923c', border: 'rgba(124,45,18,0.6)' }
   }
   if (s.includes('flipkart')) {
-    return { bg: 'rgba(30,58,138,0.3)', color: '#60a5fa', border: 'rgba(30,58,138,0.6)' }
+    return { bg: 'rgba(0,212,170,0.12)', color: '#00d4aa', border: 'rgba(0,212,170,0.3)' }
   }
   return { bg: 'rgba(39,39,42,0.6)', color: '#a1a1aa', border: 'rgba(63,63,70,0.6)' }
 }
@@ -55,7 +55,7 @@ function RatingStars({ rating, verified }: { rating: number; verified: boolean }
     <span className="flex items-center gap-0.5" aria-label={`Rating ${rating} out of 5`}>
       {Array.from({ length: 5 }, (_, i) => (
         <span key={i} className="text-sm" style={{ color: i < full ? '#fbbf24' : '#3f3f46' }}>
-          ★
+          â˜…
         </span>
       ))}
       <span className="ml-1 text-xs" style={{ color: '#71717a' }}>
@@ -181,7 +181,7 @@ export function ProductCard({
 
   async function handleWatchSubmit(e: FormEvent) {
     e.preventDefault()
-    const price = parseFloat(targetPrice.replace(/[₹,]/g, ''))
+    const price = parseFloat(targetPrice.replace(/[â‚¹,]/g, ''))
     if (!price || price <= 0) return
     setWatchSaving(true)
     try {
@@ -207,7 +207,7 @@ export function ProductCard({
   }
 
   const winnerStyle = isWinner
-    ? { border: '2px solid #7c3aed', boxShadow: '0 0 28px rgba(124,58,237,0.18)' }
+    ? { border: '2px solid #e8a045', boxShadow: '0 0 28px rgba(232,160,69,0.12)' }
     : { border: '1px solid #222' }
 
   return (
@@ -226,9 +226,9 @@ export function ProductCard({
         {isWinner && (
           <span
             className="flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold"
-            style={{ background: 'rgba(109,40,217,0.2)', color: '#c4b5fd', border: '1px solid rgba(109,40,217,0.4)' }}
+            style={{ background: 'rgba(232,160,69,0.22)', color: '#f0bc75', border: '1px solid rgba(232,160,69,0.35)' }}
           >
-            ★ Recommended
+            â˜… Recommended
           </span>
         )}
       </div>
@@ -244,16 +244,16 @@ export function ProductCard({
           rel="noopener noreferrer"
           className="mb-3 text-xs transition-colors"
           style={{ color: '#52525b' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#e8a045')}
           onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
         >
-          View on {product.source} →
+          View on {product.source} â†’
         </a>
       )}
 
       <div className="mt-auto flex flex-col gap-1.5">
         <p className="text-xl font-bold" style={{ color: '#f5f5f5' }}>
-          ₹{product.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+          â‚¹{product.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
         </p>
 
         <div className="flex items-center gap-2">
@@ -271,7 +271,7 @@ export function ProductCard({
       <div className="mt-4">
         <div className="mb-1.5 flex items-center justify-between">
           <span className="text-xs" style={{ color: '#52525b' }}>Match score</span>
-          <span className="text-xs font-semibold" style={{ color: '#a78bfa' }}>{scorePercent}%</span>
+          <span className="text-xs font-semibold" style={{ color: '#e8a045' }}>{scorePercent}%</span>
         </div>
         <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: '#222' }}>
           <div className="score-bar-fill" style={{ width: `${barWidth}%` }} />
@@ -281,9 +281,9 @@ export function ProductCard({
       {isWinner && justification && (
         <div
           className="mt-4 rounded-xl p-3 text-xs leading-relaxed"
-          style={{ background: 'rgba(109,40,217,0.08)', border: '1px solid rgba(109,40,217,0.2)', color: '#a1a1aa' }}
+          style={{ background: 'rgba(232,160,69,0.08)', border: '1px solid rgba(232,160,69,0.22)', color: '#a1a1aa' }}
         >
-          <span className="mb-1 block text-xs font-semibold" style={{ color: '#a78bfa' }}>
+          <span className="mb-1 block text-xs font-semibold" style={{ color: '#e8a045' }}>
             AI Reasoning
           </span>
           {justification}
@@ -297,7 +297,7 @@ export function ProductCard({
             onClick={handleConfirm}
             className="w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200"
             style={{
-              background: isWinner ? 'linear-gradient(135deg, #7c3aed, #6d28d9)' : 'rgba(39,39,42,0.8)',
+              background: isWinner ? '#e8a045' : 'rgba(39,39,42,0.8)',
               color: isWinner ? '#fff' : '#a1a1aa',
               border: isWinner ? 'none' : '1px solid #333',
             }}
@@ -309,7 +309,7 @@ export function ProductCard({
               e.currentTarget.style.opacity = '1'
             }}
           >
-            {isWinner ? '⚡ Confirm Purchase' : 'Confirm Purchase'}
+            {isWinner ? 'âš¡ Confirm Purchase' : 'Confirm Purchase'}
           </button>
         )}
 
@@ -321,7 +321,7 @@ export function ProductCard({
 
         {confirmState === 'signing' && (
           <div className="w-full rounded-xl px-4 py-2.5 text-center text-sm" style={{ background: 'rgba(39,39,42,0.6)', color: '#71717a', border: '1px solid #333' }}>
-            <span className="inline-block animate-pulse">Sign in Pera →</span>
+            <span className="inline-block animate-pulse">Sign in Pera â†’</span>
           </div>
         )}
 
@@ -341,7 +341,7 @@ export function ProductCard({
                 border: confirmState === 'done' ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(217,119,6,0.25)',
               }}
             >
-              {confirmState === 'done' ? '✓ Signed on Algorand' : '✓ Purchase noted locally'}
+              {confirmState === 'done' ? 'âœ“ Signed on Algorand' : 'âœ“ Purchase noted locally'}
             </div>
             {txId && explorerUrl && (
               <a
@@ -350,7 +350,7 @@ export function ProductCard({
                 rel="noopener noreferrer"
                 className="text-center text-xs transition-colors"
                 style={{ color: '#52525b' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#e8a045')}
                 onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
                 title="View on Algorand Explorer"
               >
@@ -362,9 +362,9 @@ export function ProductCard({
               <button
                 onClick={() => setWatchState('input')}
                 className="w-full rounded-xl px-4 py-2 text-xs font-medium transition-all"
-                style={{ background: 'rgba(124,58,237,0.08)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(124,58,237,0.14)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(124,58,237,0.08)')}
+                style={{ background: 'rgba(232,160,69,0.08)', color: '#e8a045', border: '1px solid rgba(232,160,69,0.2)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(232,160,69,0.14)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(232,160,69,0.08)')}
               >
                 Watch for price drop
               </button>
@@ -374,7 +374,7 @@ export function ProductCard({
               <form onSubmit={handleWatchSubmit} className="flex gap-2">
                 <input
                   type="number"
-                  placeholder="Target price (₹)"
+                  placeholder="Target price (â‚¹)"
                   value={targetPrice}
                   onChange={(e) => setTargetPrice(e.target.value)}
                   className="flex-1 rounded-xl px-3 py-2 text-xs outline-none"
@@ -384,7 +384,7 @@ export function ProductCard({
                   type="submit"
                   disabled={watchSaving}
                   className="rounded-xl px-3 py-2 text-xs font-semibold transition-opacity disabled:opacity-50"
-                  style={{ background: '#7c3aed', color: '#fff' }}
+                  style={{ background: '#e8a045', color: '#fff' }}
                 >
                   {watchSaving ? '...' : 'Set'}
                 </button>
@@ -394,9 +394,9 @@ export function ProductCard({
             {watchState === 'saved' && (
               <div
                 className="w-full rounded-xl px-4 py-2 text-center text-xs"
-                style={{ background: 'rgba(124,58,237,0.08)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}
+                style={{ background: 'rgba(232,160,69,0.08)', color: '#e8a045', border: '1px solid rgba(232,160,69,0.2)' }}
               >
-                Watching for ₹{parseFloat(targetPrice).toLocaleString('en-IN', { maximumFractionDigits: 0 })} drop
+                Watching for â‚¹{parseFloat(targetPrice).toLocaleString('en-IN', { maximumFractionDigits: 0 })} drop
               </div>
             )}
           </div>
@@ -407,10 +407,12 @@ export function ProductCard({
             className="w-full rounded-xl px-4 py-2.5 text-center text-sm"
             style={{ background: 'rgba(217,119,6,0.1)', color: '#fbbf24', border: '1px solid rgba(217,119,6,0.25)' }}
           >
-            ✓ Purchase noted locally
+            âœ“ Purchase noted locally
           </div>
         )}
       </div>
     </div>
   )
 }
+
+

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 interface StatusTickerProps {
   status: string
@@ -21,7 +21,7 @@ export function StatusTicker({ status, loading }: StatusTickerProps) {
               key={delay}
               className="animate-pulse-dot inline-block h-1.5 w-1.5 rounded-full"
               style={{
-                background: '#7c3aed',
+                background: '#e8a045',
                 animationDelay: `${delay}ms`,
               }}
             />
@@ -34,8 +34,9 @@ export function StatusTicker({ status, loading }: StatusTickerProps) {
         className="transition-opacity duration-300"
         style={{ opacity: status ? 1 : 0 }}
       >
-        {status || 'Initialising agent…'}
+        {status || 'Initialising agentâ€¦'}
       </span>
     </div>
   )
 }
+

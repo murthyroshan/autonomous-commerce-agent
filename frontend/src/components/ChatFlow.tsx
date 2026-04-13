@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useRef, useState } from 'react'
 
@@ -115,21 +115,21 @@ export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
       <div className="flex flex-col items-center gap-4 w-full animate-fade-in-up">
         <div
           className="flex items-center gap-3 rounded-full px-5 py-2.5 shadow-lg"
-          style={{ background: '#111', border: '1px solid #7c3aed' }}
+          style={{ background: '#111', border: '1px solid #e8a045' }}
         >
-          <span className="animate-spin-slow">✨</span>
+          <span className="animate-spin-slow">âœ¨</span>
           <span className="text-sm font-medium" style={{ color: '#f5f5f5' }}>
-            Searching for: <strong style={{ color: '#a78bfa' }}>{enrichedQuery}</strong>
+            Searching for: <strong style={{ color: '#e8a045' }}>{enrichedQuery}</strong>
           </span>
         </div>
         <button
           onClick={handleReset}
           className="text-xs transition-colors"
           style={{ color: '#71717a' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#e8a045')}
           onMouseLeave={(e) => (e.currentTarget.style.color = '#71717a')}
         >
-          ← New search
+          â† New search
         </button>
       </div>
     )
@@ -145,9 +145,9 @@ export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
           <div
             className="rounded-2xl rounded-tr-none px-4 py-2.5 text-sm"
             style={{
-              background: 'rgba(124,58,237,0.15)',
+              background: 'rgba(232,160,69,0.14)',
               color: '#d8b4fe',
-              border: '1px solid rgba(124,58,237,0.3)',
+              border: '1px solid rgba(232,160,69,0.3)',
             }}
           >
             {query}
@@ -162,7 +162,7 @@ export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
                 <div key={idx} className="flex gap-3 animate-fade-in-up">
                   <div
                     className="flex shrink-0 h-8 w-8 items-center justify-center rounded-full text-xs font-bold shadow-lg"
-                    style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff' }}
+                    style={{ background: '#e8a045', color: '#fff' }}
                   >
                     K
                   </div>
@@ -180,8 +180,8 @@ export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
                       value={answers[q] || ''}
                       onChange={(e) => setAnswers((prev) => ({ ...prev, [q]: e.target.value }))}
                       className="w-full max-w-md rounded-xl px-4 py-2.5 text-sm outline-none transition-all"
-                      style={{ background: '#0a0a0a', color: '#f5f5f5', border: '1px solid #333' }}
-                      onFocus={(e) => (e.currentTarget.style.borderColor = '#7c3aed')}
+                      style={{ background: '#0a0a09', color: '#f5f5f5', border: '1px solid #333' }}
+                      onFocus={(e) => (e.currentTarget.style.borderColor = '#e8a045')}
                       onBlur={(e) => (e.currentTarget.style.borderColor = '#333')}
                       autoFocus={idx === revealedIdx}
                     />
@@ -196,9 +196,9 @@ export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
                   type="submit"
                   disabled={isEnriching}
                   className="rounded-xl px-5 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50"
-                  style={{ background: '#f5f5f5', color: '#0a0a0a' }}
+                  style={{ background: '#f5f5f5', color: '#0a0a09' }}
                 >
-                  {isEnriching ? 'Refining...' : 'Search now →'}
+                  {isEnriching ? 'Refining...' : 'Search now â†’'}
                 </button>
               </div>
             )}
@@ -214,10 +214,13 @@ export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
       className={`relative w-full max-w-2xl transition-opacity duration-300 ${disabled || isClarifyingLoading ? 'opacity-50' : 'opacity-100'}`}
     >
       <div className="relative group">
-        <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-violet-600 to-purple-600 opacity-20 blur-md transition duration-500 group-hover:opacity-40" />
-        <div className="relative flex items-center p-1 rounded-full bg-[#111111] border border-[#333333] shadow-2xl transition-all duration-300 focus-within:border-violet-500 focus-within:bg-[#161616]">
+        <div
+          className="absolute -inset-1 rounded-full opacity-20 blur-md transition duration-500 group-hover:opacity-40"
+          style={{ background: 'rgba(232,160,69,0.12)' }}
+        />
+        <div className="relative flex items-center p-1 rounded-full bg-[#111111] border border-[#333333] shadow-2xl transition-all duration-300 focus-within:border-[#e8a045] focus-within:bg-[#161616]">
           <div className="pl-5 pr-2 pointer-events-none">
-            <span className="text-xl" style={{ filter: 'grayscale(0.6)' }}>🛍️</span>
+            <span className="text-xl" style={{ filter: 'grayscale(0.6)' }}>ðŸ›ï¸</span>
           </div>
 
           <input
@@ -234,9 +237,9 @@ export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
           <button
             type="submit"
             disabled={disabled || isClarifyingLoading || !query.trim()}
-            className="shrink-0 mr-2 rounded-full px-8 py-3.5 text-sm font-semibold text-[#0a0a0a] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="shrink-0 mr-2 rounded-full px-8 py-3.5 text-sm font-semibold text-[#0a0a09] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
-              background: 'linear-gradient(135deg, #f5f5f5 0%, #e5e5e5 100%)',
+              background: '#e8a045',
               boxShadow: '0 4px 14px 0 rgba(255,255,255,0.1)',
             }}
           >
@@ -247,3 +250,4 @@ export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
     </form>
   )
 }
+
