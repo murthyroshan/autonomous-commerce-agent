@@ -8,12 +8,12 @@ import { colors, transitions } from '@/design-system/tokens'
 type OrbState = 'idle' | 'listening' | 'searching' | 'comparing' | 'done' | 'error'
 
 const orbColors: Record<OrbState, string> = {
-  idle: colors.accent.amberDim,
-  listening: 'rgba(232,160,69,0.60)',
-  searching: colors.accent.cyanDim,
-  comparing: colors.accent.cyan,
-  done: colors.accent.amber,
-  error: colors.accent.redGlow,
+  idle: 'rgba(232,160,69,0.5)',
+  listening: 'rgba(232,160,69,0.7)',
+  searching: 'rgba(0,212,170,0.6)',
+  comparing: 'rgba(0,212,170,0.8)',
+  done: '#e8a045',
+  error: 'rgba(255,77,77,0.6)',
 }
 
 const orbSizes: Record<OrbState, number> = {
@@ -24,6 +24,14 @@ const orbSizes: Record<OrbState, number> = {
   done: 110,
   error: 100,
 }
+
+const quickQueries = [
+  { query: 'Gaming laptop under \u20b960,000', hint: 'Performance + value' },
+  { query: 'OnePlus 13', hint: 'Flagship smartphone' },
+  { query: 'Earbuds under \u20b93,000', hint: 'Best budget audio' },
+  { query: 'Sony 4K TV under \u20b950,000', hint: 'Big-screen deals' },
+  { query: 'Mechanical keyboard', hint: 'Gaming and typing picks' },
+]
 
 export function SearchOrb({ onSearch }: { onSearch: (q: string) => void }) {
   const { agentState } = useAppStore()
@@ -97,7 +105,7 @@ export function SearchOrb({ onSearch }: { onSearch: (q: string) => void }) {
   }
 
   return (
-    <div className="relative flex flex-col items-center gap-6">
+    <div className="relative flex w-full flex-col items-center gap-6">
       <div
         className="relative cursor-pointer"
         onClick={() => inputRef.current?.focus()}
@@ -137,7 +145,7 @@ export function SearchOrb({ onSearch }: { onSearch: (q: string) => void }) {
             width: orbSizes[orbState],
             height: orbSizes[orbState],
             borderRadius: '50%',
-            background: `radial-gradient(circle at 35% 35%, ${orbColors[orbState]}, transparent 70%)`,
+            background: `radial-gradient(circle at 35% 35%, ${orbColors[orbState]}, rgba(232,160,69,0.08) 70%)`,
             border: `1px solid ${orbColors[orbState]}`,
             backdropFilter: 'blur(20px)',
           }}
@@ -188,7 +196,7 @@ export function SearchOrb({ onSearch }: { onSearch: (q: string) => void }) {
           onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="Find the best gaming laptop under ₹60,000..."
+          placeholder="Find the best gaming laptop under \u20b960,000..."
           disabled={['searching', 'comparing'].includes(orbState)}
           className="w-full bg-transparent px-5 py-4 text-[15px] font-[400] tracking-[-0.01em] outline-none placeholder-[#444440] disabled:opacity-50"
           style={{ color: colors.text.primary }}
@@ -217,29 +225,31 @@ export function SearchOrb({ onSearch }: { onSearch: (q: string) => void }) {
 
       {orbState === 'idle' && (
         <motion.div
-          initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
-          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-          transition={transitions.spring}
-          className="flex flex-wrap justify-center gap-2"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-2"
         >
-          {[
-            'Gaming laptop under ₹60,000',
-            'OnePlus 13',
-            'Wireless earbuds under ₹3,000',
-            'Sony 4K TV under ₹50,000',
-            'Mechanical keyboard',
-          ].map((q) => (
+          {quickQueries.map(({ query: quickQuery, hint }) => (
             <button
-              key={q}
-              onClick={() => handleSubmit(q)}
-              className="rounded-full border px-3 py-1.5 font-mono text-[12px] tracking-[0.02em] transition-all duration-150"
-              style={{
-                background: 'rgba(255,255,255,0.03)',
-                borderColor: colors.border.default,
-                color: colors.text.secondary,
+              key={quickQuery}
+              onClick={() => {
+                setQuery(quickQuery)
+                onSearch(quickQuery)
               }}
+              className="
+                group w-full rounded-xl border px-4 py-3 text-left
+                bg-[rgba(255,255,255,0.03)] border-[rgba(255,255,255,0.08)]
+                hover:bg-[rgba(255,255,255,0.06)] hover:border-[rgba(232,160,69,0.4)]
+                transition-all duration-200
+              "
             >
-              {q}
+              <p className="font-mono text-[12px] text-[#f2f2f0] tracking-[0.01em] leading-snug">
+                {quickQuery}
+              </p>
+              <p className="mt-1 text-[11px] text-[#888884] group-hover:text-[#c2c2be] transition-colors">
+                {hint}
+              </p>
             </button>
           ))}
         </motion.div>

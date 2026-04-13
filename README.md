@@ -1,6 +1,6 @@
-﻿# Kartiq â€” Autonomous AI Shopping Agent
+# Kartiq — Autonomous AI Shopping Agent
 
-Kartiq is an AI agent that shops for you. Describe what you want in plain English â€” it searches Google Shopping, scores every result against your budget, compares prices and ratings, and hands you the best option with a clear explanation of why.
+Kartiq is an AI agent that shops for you. Describe what you want in plain English — it searches Google Shopping, scores results against your budget, compares prices and ratings, and returns the best option with a clear explanation.
 
 Confirmed purchases are logged as immutable transactions on the Algorand blockchain.
 
@@ -13,41 +13,41 @@ Confirmed purchases are logged as immutable transactions on the Algorand blockch
 
 ## How it works
 
-```
-"Find the best gaming laptop under â‚¹60,000"
-             â”‚
-     â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”
-     â”‚  Search Agent  â”‚  â†’ Serper.dev Google Shopping (live Indian results)
-     â””â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”˜    Falls back to Groq web search, then mock data
-             â”‚
-     â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”
-     â”‚ Compare Agent  â”‚  â†’ Normalizes price, rating, reviews to 0â€“1 scale
-     â””â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”˜    Weights: price 45% Â· rating 35% Â· reviews 20%
-             â”‚
-     â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”
-     â”‚ Decision Agent â”‚  â†’ Groq LLM picks the winner and explains why
-     â””â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-             â”‚
-     â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”
-     â”‚   Next.js UI   â”‚  â†’ Live streaming status, ranked product cards
-     â””â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”˜    Violet glow on winner, animated score bars
-             â”‚
-     â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”
-     â”‚    Algorand    â”‚  â†’ Purchase intent logged on testnet blockchain
-     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+```text
+"Find the best gaming laptop under ₹60,000"
+             │
+     ┌───────▼────────┐
+     │  Search Agent  │  → Serper.dev Google Shopping (live Indian results)
+     └───────┬────────┘    Falls back to Groq web search, then mock data
+             │
+     ┌───────▼────────┐
+     │ Compare Agent  │  → Normalizes price, rating, reviews to 0–1 scale
+     └───────┬────────┘    Weights: price 45% · rating 35% · reviews 20%
+             │
+     ┌───────▼────────┐
+     │ Decision Agent │  → Groq LLM picks winner and explains why
+     └───────┬────────┘
+             │
+     ┌───────▼────────┐
+     │   Next.js UI   │  → Live streaming status, ranked product cards
+     └───────┬────────┘
+             │
+     ┌───────▼────────┐
+     │    Algorand    │  → Purchase intent logged on testnet blockchain
+     └────────────────┘
 ```
 
 ---
 
 ## Features
 
-- **Natural language queries** â€” type exactly what you want, including budget
-- **Budget enforcement** â€” "under â‚¹30,000" is respected at every layer, not just filtered after the fact
-- **Multi-category** â€” laptops, phones, TVs, headphones, earbuds, speakers, watches, tablets, keyboards, cameras
-- **Data quality layer** â€” fake prices removed, accessories filtered out, duplicates collapsed, unverified ratings flagged
-- **3-tier fallback** â€” Serper â†’ Groq web search â†’ mock data, so it never fully breaks
-- **Real-time streaming** â€” watch the agent work live via SSE
-- **Blockchain logging** â€” every confirmed purchase gets an Algorand transaction ID
+- Natural language queries with budget constraints
+- Budget enforcement at every layer (not post-filter only)
+- Multi-category support: laptops, phones, TVs, headphones, earbuds, speakers, watches, tablets, keyboards, cameras
+- Data quality layer: removes fake prices, filters accessories, collapses duplicates, flags unverified ratings
+- 3-tier fallback: Serper → Groq web search → mock data
+- Real-time streaming via SSE
+- Blockchain logging for confirmed purchases
 
 ---
 
@@ -57,7 +57,7 @@ Confirmed purchases are logged as immutable transactions on the Algorand blockch
 |-------|-----------|
 | Backend | Python 3.11, FastAPI, Pydantic v2 |
 | Agents | Plain Python functions + optional LangGraph |
-| LLM | Groq API - llama-3.3-70b-versatile |
+| LLM | Groq API (`llama-3.3-70b-versatile`) |
 | Product data | Serper.dev Google Shopping API |
 | Blockchain | Algorand testnet, py-algorand-sdk, AlgoNode |
 | Smart contract | PyTeal, Algorand LogicSig |
@@ -72,52 +72,47 @@ Confirmed purchases are logged as immutable transactions on the Algorand blockch
 
 - Python 3.11+
 - Node.js 18+
-- Two free API keys (no credit card needed for either):
-  - **Serper.dev** â†’ [serper.dev](https://serper.dev) â€” 2,500 free searches
-  - **Groq** â†’ [console.groq.com](https://console.groq.com) â€” free tier
+- Two free API keys:
+  - Serper.dev: https://serper.dev
+  - Groq: https://console.groq.com
 
 ---
 
 ## Getting started
 
-### 1. Clone the repository
+### 1) Clone the repository
 
 ```bash
 git clone https://github.com/murthyroshan/autonomous-commerce-agent.git
 cd autonomous-commerce-agent
 ```
 
-### 2. Set up the backend
+### 2) Set up backend
 
 ```bash
-# Create and activate virtual environment
 python -m venv venv
 source venv/bin/activate       # Windows: venv\Scripts\activate
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Configure environment variables
 cp .env.example .env
 ```
 
-Open `.env` and fill in your keys:
+Set keys in `.env`:
 
 ```env
 SERPER_API_KEY=your_serper_key_here
 GROQ_API_KEY=your_groq_key_here
 ```
 
-### 3. Run the backend
+### 3) Run backend
 
 ```bash
 uvicorn api.main:app --reload --port 8000
 ```
 
-API is now live at `http://localhost:8000`  
-Interactive docs at `http://localhost:8000/docs`
+- API: `http://localhost:8000`
+- Docs: `http://localhost:8000/docs`
 
-### 4. Set up the frontend
+### 4) Set up frontend
 
 ```bash
 cd frontend
@@ -130,19 +125,19 @@ Create `frontend/.env.local`:
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-### 5. Run the frontend
+### 5) Run frontend
 
 ```bash
 npm run dev
 ```
 
-Open `http://localhost:3000` â€” type a query and search.
+Open `http://localhost:3000`.
 
 ---
 
 ## Running without API keys
 
-Set `MOCK_ONLY=true` in your `.env` to run entirely on hardcoded sample data â€” no API keys needed. Useful for development and testing.
+Set `MOCK_ONLY=true` in `.env`:
 
 ```bash
 MOCK_ONLY=true uvicorn api.main:app --reload --port 8000
@@ -153,11 +148,10 @@ MOCK_ONLY=true uvicorn api.main:app --reload --port 8000
 ## Running tests
 
 ```bash
-# From the project root
 MOCK_ONLY=true python -m pytest tests/ -v
 ```
 
-Expected output: **59+ passed**
+Expected: `59+ passed`
 
 ---
 
@@ -165,10 +159,10 @@ Expected output: **59+ passed**
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/health` | Health check |
-| `POST` | `/api/search` | Full pipeline â€” returns JSON |
-| `GET` | `/api/search/stream?query=...` | SSE stream â€” live agent status |
-| `POST` | `/api/confirm` | Log purchase to Algorand testnet |
+| GET | `/api/health` | Health check |
+| POST | `/api/search` | Full pipeline, JSON result |
+| GET | `/api/search/stream?query=...` | SSE live agent status |
+| POST | `/api/confirm` | Log purchase to Algorand testnet |
 
 ### Example request
 
@@ -197,7 +191,7 @@ curl -X POST http://localhost:8000/api/search \
     "title": "boAt Airdopes 141 TWS Earbuds",
     "price": 1299.0,
     "score": 0.8712,
-    "justification": "The boAt Airdopes 141 offers exceptional value at â‚¹1,299 with 45,000+ verified reviews backing its 4.1â˜… rating. Among all compared options it combines the lowest price with the highest buyer confidence."
+    "justification": "The boAt Airdopes 141 offers exceptional value at ₹1,299 with 45,000+ reviews and a 4.1-star rating."
   },
   "error": null
 }
@@ -207,39 +201,35 @@ curl -X POST http://localhost:8000/api/search \
 
 ## Project structure
 
-```
-kartiq/
-â”œâ”€â”€ agents/
-â”‚   â”œâ”€â”€ state.py            â† AgentState TypedDict â€” shared data bus
-â”‚   â”œâ”€â”€ mock_data.py        â† Fallback product data, category keywords
-â”‚   â”œâ”€â”€ search_agent.py     â† Serper â†’ Groq â†’ mock, with full data validation
-â”‚   â”œâ”€â”€ compare_agent.py    â† Normalized scoring logic
-â”‚   â”œâ”€â”€ decision_agent.py   â† Groq LLM recommendation
-â”‚   â””â”€â”€ pipeline.py         â† Orchestrates all three agents
-â”œâ”€â”€ api/
-â”‚   â”œâ”€â”€ main.py             â† FastAPI app, CORS config
-â”‚   â”œâ”€â”€ routes.py           â† All endpoints including SSE stream
-â”‚   â””â”€â”€ models.py           â† Pydantic request/response models
-â”œâ”€â”€ blockchain/
-â”‚   â””â”€â”€ algorand.py         â† Algorand testnet purchase logging
-â”œâ”€â”€ frontend/               â† Next.js 14 UI
-â”‚   â””â”€â”€ src/
-â”‚       â”œâ”€â”€ app/
-â”‚       â”œâ”€â”€ components/
-â”‚       â””â”€â”€ hooks/
-â”œâ”€â”€ tests/
-â”‚   â”œâ”€â”€ test_agents.py
-â”‚   â”œâ”€â”€ test_pipeline.py
-â”‚   â””â”€â”€ test_api.py
-â”œâ”€â”€ .env.example
-â”œâ”€â”€ requirements.txt
-â””â”€â”€ pytest.ini
+```text
+autonomous-commerce-agent/
+├── agents/
+│   ├── state.py
+│   ├── mock_data.py
+│   ├── search_agent.py
+│   ├── compare_agent.py
+│   ├── decision_agent.py
+│   └── pipeline.py
+├── api/
+│   ├── main.py
+│   ├── routes.py
+│   └── models.py
+├── blockchain/
+│   └── algorand.py
+├── frontend/
+│   └── src/
+├── tests/
+│   ├── test_agents.py
+│   ├── test_pipeline.py
+│   └── test_api.py
+├── .env.example
+├── requirements.txt
+└── pytest.ini
 ```
 
 ---
 
 ## Roadmap
-
 
 - [x] Phase 1 — Core agent pipeline + mock data
 - [x] Phase 2 — Live Serper data + retry logic
