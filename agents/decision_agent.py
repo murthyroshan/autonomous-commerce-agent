@@ -29,36 +29,78 @@ FALLBACK_MODEL = "llama3-8b-8192"
 
 
 def _build_prompt(product: dict, all_products: list[dict]) -> str:
-    """Build the decision prompt. Adapts for single-product vs multi-product scenarios."""
+    """Build the decision prompt with badge-aware caveats for store tier and rating confidence."""
+    badge      = product.get("primary_badge", {})
+    tier       = badge.get("tier", "tier3")
+    sec_labels = [b["label"] for b in product.get("secondary_badges", [])]
+
+    # Build badge context string
+    badge_context = ""
+    if tier == "tier1":
+        badge_context = (
+            "This product is sold by an official brand store — "
+            "mention the official warranty in your recommendation."
+        )
+    elif tier == "tier3":
+        badge_context = (
+            "This product is from an unverified seller — "
+            "include a soft caveat to check seller ratings."
+        )
+    elif tier == "tier4":
+        dev = badge.get("description", "")
+        badge_context = (
+            f"WARNING — this product has a suspicious price. {dev} "
+            f"Explicitly warn the user about this in your recommendation."
+        )
+
+    rating_caveat = ""
+    if "Low Confidence" in sec_labels:
+        rating_caveat = (
+            "Note: this product has very few reviews — "
+            "mention rating reliability is uncertain."
+        )
+    elif "Penalized Rating" in sec_labels:
+        rating_caveat = (
+            "Note: this product had no rating data — "
+            "mention that rating could not be verified."
+        )
+
     competitors = [p for p in all_products if p["title"] != product["title"]][:3]
 
     if not competitors:
-        # Single product — value-assessment prompt (no "other options" language)
         return (
             f"You are helping a user choose a product.\n\n"
-            f"PRODUCT FOUND:\n"
+            f"PRODUCT:\n"
             f"- Name: {product['title']}\n"
             f"- Price: ₹{product['price']:,.0f}\n"
-            f"- Rating: {product['rating']}★ ({product['review_count']:,} reviews)\n\n"
-            f"In exactly 2 sentences, explain whether this product offers "
-            f"good value at this price. Be honest — if it looks weak, say so."
+            f"- Adjusted rating: {product.get('_adj_rating', 0):.1f}★ "
+            f"({product.get('review_count', 0):,} reviews)\n"
+            f"- Store: {product.get('source', 'Unknown')}\n\n"
+            f"{badge_context}\n{rating_caveat}\n\n"
+            f"In exactly 2 sentences, explain whether this is good value. "
+            f"Be honest — if it looks weak, say so."
         )
 
-    # Multiple products — comparison prompt
     competitor_text = "\n".join(
-        f"- {p['title']}: ₹{p['price']:,.0f}, {p['rating']}★"
+        f"- {p['title']}: ₹{p['price']:,.0f}, "
+        f"{p.get('_adj_rating', 0):.1f}★ adj, "
+        f"score={p.get('score', 0)}"
         for p in competitors
     )
+
     return (
         f"You are helping a user choose the best product.\n\n"
-        f"RECOMMENDED PRODUCT:\n"
+        f"RECOMMENDED:\n"
         f"- Name: {product['title']}\n"
         f"- Price: ₹{product['price']:,.0f}\n"
-        f"- Rating: {product['rating']}★ ({product['review_count']:,} reviews)\n"
-        f"- Score: {product['score']} / 1.00\n\n"
-        f"OTHER OPTIONS CONSIDERED:\n{competitor_text}\n\n"
-        f"In exactly 2 sentences, explain why this product is the best choice. "
-        f"Be specific about the price-to-performance tradeoff. "
+        f"- Adjusted rating: {product.get('_adj_rating', 0):.1f}★ "
+        f"({product.get('review_count', 0):,} reviews)\n"
+        f"- Store: {product.get('source', 'Unknown')}\n"
+        f"- Score: {product.get('score', 0)}\n\n"
+        f"OTHER OPTIONS:\n{competitor_text}\n\n"
+        f"{badge_context}\n{rating_caveat}\n\n"
+        f"In exactly 2 sentences, explain why this is the best choice. "
+        f"Be specific about price-to-performance. "
         f"Do not start with 'I' or mention the scoring system."
     )
 

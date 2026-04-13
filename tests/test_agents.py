@@ -220,3 +220,169 @@ class TestNormalize:
 
     def test_empty(self):
         assert _normalize([]) == []
+
+
+# ── Feature 5: New TestCompareAgent additions ─────────────────────────────────
+
+class TestCompareAgentNew:
+    """Additional compare_agent tests added in Feature 5."""
+
+    def test_log_normalization_with_outlier(self):
+        # 50,000 reviews should not collapse 200 vs 800 to near-zero
+        from agents.compare_agent import _log_normalize
+        values = [200.0, 800.0, 50000.0]
+        result = _log_normalize(values)
+        # highest gets 1.0
+        assert result[2] == 1.0
+        assert result[1] > result[0]
+        gap_low_mid  = result[1] - result[0]
+        assert gap_low_mid > 0.05, "Low-mid gap too small — log normalization not working"
+
+    def test_confidence_adjusted_rating_low_reviews(self):
+        from agents.compare_agent import _confidence_adjusted_rating
+        # 4.9 stars from 3 reviews should be pulled toward 2.5
+        adj = _confidence_adjusted_rating(4.9, 3)
+        assert adj < 4.0, f"Expected < 4.0 but got {adj}"
+        assert adj > 2.5, "Should be above neutral"
+
+    def test_confidence_adjusted_rating_full_confidence(self):
+        from agents.compare_agent import _confidence_adjusted_rating
+        # 100+ reviews → rating unchanged
+        adj = _confidence_adjusted_rating(4.3, 150)
+        assert abs(adj - 4.3) < 0.01
+
+    def test_anomaly_detection_flags_suspicious_price(self):
+        from agents.compare_agent import _detect_price_anomaly
+        prices = [55000.0, 58000.0, 62000.0, 12000.0]  # 12k is suspicious
+        suspicious, dev_pct, median = _detect_price_anomaly(12000.0, prices)
+        assert suspicious is True
+        assert dev_pct > 35.0
+
+    def test_anomaly_detection_normal_price(self):
+        from agents.compare_agent import _detect_price_anomaly
+        prices = [55000.0, 58000.0, 62000.0, 52000.0]
+        suspicious, _, _ = _detect_price_anomaly(52000.0, prices)
+        assert suspicious is False
+
+
+# ── Feature 5: TestBadgeEngine ────────────────────────────────────────────────
+
+class TestBadgeEngine:
+
+    def _make_product(self, title="Test Product", price=5000.0,
+                      rating=4.2, review_count=500,
+                      source="Amazon", score=0.75,
+                      eliminated=False, elimination_reason=None,
+                      price_suspicious=False, anomaly_deviation_pct=0.0,
+                      anomaly_median_price=0.0,
+                      trust_tier="tier2_high", trust_multiplier=1.06,
+                      _adj_rating=4.2) -> dict:
+        p = {
+            "title": title, "price": price, "rating": rating,
+            "review_count": review_count, "source": source,
+            "score": score, "_adj_rating": _adj_rating,
+            "trust_tier": trust_tier,
+            "trust_multiplier": trust_multiplier,
+            "price_suspicious": price_suspicious,
+            "anomaly_deviation_pct": anomaly_deviation_pct,
+            "anomaly_median_price": anomaly_median_price,
+        }
+        if eliminated:
+            p["eliminated"] = True
+            p["elimination_reason"] = elimination_reason or "Test elimination"
+        return p
+
+    def test_official_store_gets_tier1(self):
+        from agents.badge_engine import assign_badges
+        p = self._make_product(source="OnePlus Official Store",
+                               trust_tier="tier1", trust_multiplier=1.12)
+        assign_badges(p, [p])
+        assert p["primary_badge"]["tier"] == "tier1"
+        assert p["primary_badge"]["icon"] == "shield"
+
+    def test_amazon_gets_tier2(self):
+        from agents.badge_engine import assign_badges
+        p = self._make_product(source="Amazon")
+        assign_badges(p, [p])
+        assert p["primary_badge"]["tier"] == "tier2"
+
+    def test_unknown_store_gets_tier3(self):
+        from agents.badge_engine import assign_badges
+        p = self._make_product(source="SomeRandomShop.in",
+                               trust_tier="unknown", trust_multiplier=0.88)
+        assign_badges(p, [p])
+        assert p["primary_badge"]["tier"] == "tier3"
+
+    def test_suspicious_price_overrides_to_tier4(self):
+        from agents.badge_engine import assign_badges
+        p = self._make_product(
+            source="Amazon", price=8000.0,
+            price_suspicious=True, anomaly_deviation_pct=48.5,
+            anomaly_median_price=58000.0
+        )
+        assign_badges(p, [p])
+        assert p["primary_badge"]["tier"] == "tier4"
+        assert p["primary_badge"]["suspicious_override"] is True
+        assert "48.5%" in p["primary_badge"]["description"]
+
+    def test_eliminated_product_gets_eliminated_badge(self):
+        from agents.badge_engine import assign_badges
+        p = self._make_product(
+            eliminated=True, elimination_reason="Avoided brand", score=0.0
+        )
+        assign_badges(p, [p])
+        assert p["primary_badge"]["tier"] == "eliminated"
+        assert "Avoided brand" in p["primary_badge"]["description"]
+
+    def test_low_confidence_secondary_badge(self):
+        from agents.badge_engine import assign_badges
+        p = self._make_product(review_count=12, _adj_rating=3.1)
+        assign_badges(p, [p])
+        labels = [b["label"] for b in p["secondary_badges"]]
+        assert "Low Confidence" in labels
+        low_conf = next(b for b in p["secondary_badges"]
+                        if b["label"] == "Low Confidence")
+        assert "12" in low_conf.get("note", "")
+
+    def test_penalized_rating_secondary_badge(self):
+        from agents.badge_engine import assign_badges
+        p = self._make_product(rating=0.0, _adj_rating=2.5, review_count=500)
+        assign_badges(p, [p])
+        labels = [b["label"] for b in p["secondary_badges"]]
+        assert "Penalized Rating" in labels
+
+    def test_budget_pick_only_from_trusted_store(self):
+        from agents.badge_engine import assign_badges
+        cheap_untrusted = self._make_product(
+            title="Cheap Unknown", price=500.0,
+            source="SomeShop", trust_tier="unknown"
+        )
+        cheap_trusted = self._make_product(
+            title="Cheap Trusted", price=800.0,
+            source="Amazon", trust_tier="tier2_high"
+        )
+        expensive = self._make_product(
+            title="Expensive", price=5000.0,
+            source="Flipkart", trust_tier="tier2_high"
+        )
+        all_p = [cheap_untrusted, cheap_trusted, expensive]
+        for p in all_p:
+            assign_badges(p, all_p)
+        trusted_labels   = [b["label"] for b in cheap_trusted["secondary_badges"]]
+        untrusted_labels = [b["label"] for b in cheap_untrusted["secondary_badges"]]
+        assert "Budget Pick" in trusted_labels
+        assert "Budget Pick" not in untrusted_labels
+
+    def test_most_reviewed_badge(self):
+        from agents.badge_engine import assign_badges
+        products = [
+            self._make_product(title="A", review_count=500),
+            self._make_product(title="B", review_count=15000),
+            self._make_product(title="C", review_count=200),
+        ]
+        for p in products:
+            assign_badges(p, products)
+        b_labels = [b["label"] for b in products[1]["secondary_badges"]]
+        assert "Most Reviewed" in b_labels
+        a_labels = [b["label"] for b in products[0]["secondary_badges"]]
+        assert "Most Reviewed" not in a_labels
