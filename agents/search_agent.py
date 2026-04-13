@@ -17,6 +17,7 @@ import re
 import json
 import logging
 import requests
+from dotenv import load_dotenv
 
 from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
 from groq import Groq
@@ -28,6 +29,9 @@ logger = logging.getLogger(__name__)
 
 SERPER_ENDPOINT = "https://google.serper.dev/shopping"
 _groq_client = None  # lazily created on first use
+
+# Ensure python -c checks and local scripts read API keys from .env.
+load_dotenv()
 
 
 def _get_groq_client() -> Groq:
@@ -253,6 +257,54 @@ def _broaden_query(query: str) -> str:
     return ' '.join(q.split())  # collapse extra spaces
 
 
+def _is_exact_model_query(query: str) -> bool:
+    """
+    Returns True if the query looks like a specific model number search.
+    """
+    q = query.lower().strip()
+    has_number = bool(re.search(r"\d", q))
+
+    budget_keywords = [
+        "under", "below", "within", "upto", "budget",
+        "cheap", "best", "good", "top", "affordable",
+        "less than", "around", "between",
+    ]
+    has_budget = any(kw in q for kw in budget_keywords)
+
+    category_only = [
+        "laptop", "phone", "mobile", "headphone", "earphone",
+        "earbud", "speaker", "tv", "television", "tablet",
+        "keyboard", "mouse", "camera", "watch", "smartwatch",
+    ]
+    words = q.split()
+    is_only_category = (
+        len(words) <= 2 and
+        any(w in category_only for w in words) and
+        not has_number
+    )
+
+    return has_number and not has_budget and not is_only_category
+
+
+def _build_exact_query(query: str) -> str:
+    """
+    For exact model queries, wrap the model identifier in quotes.
+    """
+    if not _is_exact_model_query(query):
+        return query
+
+    suffixes_to_strip = [
+        r"\s+5g$", r"\s+4g$", r"\s+lte$",
+        r"\s+wifi$", r"\s+india$", r"\s+online$",
+        r"\s+buy$", r"\s+price$", r"\s+review$",
+    ]
+    clean = query.strip()
+    for suffix in suffixes_to_strip:
+        clean = re.sub(suffix, "", clean, flags=re.IGNORECASE).strip()
+
+    return f"\"{clean}\""
+
+
 # ── Price parser (raw string → float) ────────────────────────────────────────
 
 def _parse_price(raw) -> float | None:
@@ -323,16 +375,19 @@ def _call_serper(
     category: str = "default",
 ) -> list[dict]:
     """Call Serper.dev Google Shopping API. Retries up to 3 times."""
-    search_query = _enrich_query(query)
+    search_query = _build_exact_query(query)
+    enriched = _enrich_query(search_query)
+    if max_price:
+        enriched = f"{enriched} price:..{int(max_price)}"
+
     r = requests.post(
         SERPER_ENDPOINT,
         headers={"X-API-KEY": os.getenv("SERPER_API_KEY", "")},
-        json={"q": search_query, "gl": "in", "num": 20},
+        json={"q": enriched, "gl": "in", "num": 20},
         timeout=10,
     )
     r.raise_for_status()
-    raw = r.json()
-    return _parse_serper_response(raw, max_price=max_price, category=category)
+    return _parse_serper_response(r.json(), max_price=max_price, category=category)
 
 
 # ── Tier 2: Groq Compound (web search fallback) ───────────────────────────────

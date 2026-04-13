@@ -28,14 +28,22 @@ import statistics
 import re
 from .state import AgentState
 from .memory import load_prefs
+from .search_agent import _is_exact_model_query
 
 logger = logging.getLogger(__name__)
 
-WEIGHTS = {
+WEIGHTS_GENERAL = {
     "price":        0.38,
     "rating":       0.28,
     "review_count": 0.16,
     "relevance":    0.18,
+}
+
+WEIGHTS_EXACT_MODEL = {
+    "price":        0.28,
+    "rating":       0.24,
+    "review_count": 0.08,
+    "relevance":    0.40,
 }
 
 NEUTRAL_RATING   = 2.5
@@ -71,6 +79,13 @@ STORE_TRUST = {
         "multiplier": 0.88
     }
 }
+
+
+def _get_weights(query: str) -> dict:
+    """Return dynamic scoring weights based on query intent."""
+    if _is_exact_model_query(query):
+        return WEIGHTS_EXACT_MODEL
+    return WEIGHTS_GENERAL
 
 
 def _normalize(values: list[float], invert: bool = False) -> list[float]:
@@ -242,25 +257,19 @@ def compare_agent(state: AgentState, user_id: str = "demo") -> dict:
         ]
 
     all_prices = prices  # alias for anomaly detection
-    query_text = state.get("query", "")
-    query_tokens = re.findall(r"[a-zA-Z0-9]+", query_text.lower())
-    has_model_token = any(any(ch.isdigit() for ch in tok) for tok in query_tokens)
+    query = state.get("query", "")
+    weights = _get_weights(query)
 
     # ── Scoring loop ──────────────────────────────────────────────────────────
     scored = []
     for i, product in enumerate(products):
         # Step 1: base score
         base = (
-            WEIGHTS["price"]        * price_scores[i] +
-            WEIGHTS["rating"]       * rating_scores[i] +
-            WEIGHTS["review_count"] * review_scores[i] +
-            WEIGHTS["relevance"]    * relevance_scores[i]
+            weights["price"]        * price_scores[i] +
+            weights["rating"]       * rating_scores[i] +
+            weights["review_count"] * review_scores[i] +
+            weights["relevance"]    * relevance_scores[i]
         )
-
-        # Strongly prefer exact model matches for model-specific queries
-        # (e.g., "oneplus 13" should outrank "oneplus 13r").
-        if has_model_token and relevance_scores[i] >= 0.999:
-            base += 0.25
 
         # Step 2: anomaly check
         suspicious, dev_pct, median_p = _detect_price_anomaly(
@@ -333,9 +342,25 @@ def compare_agent(state: AgentState, user_id: str = "demo") -> dict:
 
     scored.sort(key=lambda x: x["score"], reverse=True)
 
+    if _is_exact_model_query(query):
+        top_relevant = max(scored, key=lambda p: p.get("relevance_score", 0))
+        if (
+            top_relevant.get("relevance_score", 0) >= 0.8
+            and scored.index(top_relevant) > 2
+        ):
+            scored.remove(top_relevant)
+            scored.insert(0, top_relevant)
+            logger.info(
+                f"Promoted exact match '{top_relevant['title']}' "
+                f"to top position (relevance={top_relevant['relevance_score']})"
+            )
+
     logger.info(
         f"compare_agent scored {len(scored)} products. "
         f"Winner: '{scored[0]['title']}' (score={scored[0]['score']})"
     )
 
-    return {"scored_products": scored}
+    return {
+        "scored_products": scored,
+        "weight_mode": "exact_model" if weights == WEIGHTS_EXACT_MODEL else "general",
+    }
