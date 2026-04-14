@@ -10,6 +10,10 @@ export interface ScoredProduct {
   source: string
   link: string
   score: number
+  /** Plain-English deal verdict from compare_agent */
+  verdict?: string
+  /** CSS hex colour for the verdict text */
+  verdict_colour?: string
   /** True when Serper/Groq returned an actual rating (not defaulted) */
   rating_verified?: boolean
   /** Raw signal from Serper — false means rating was missing in API response */
@@ -22,11 +26,20 @@ export interface Recommendation extends ScoredProduct {
   total_compared: number
 }
 
+export interface BudgetMiss {
+  product: ScoredProduct
+  budget: number
+  overage: number
+  overage_pct: number
+  message: string
+}
+
 export interface StreamResult {
   type: 'result'
   query: string
   scored_products: ScoredProduct[]
   recommendation: Recommendation | null
+  budget_miss?: BudgetMiss | null
   error: string | null
 }
 

@@ -30,6 +30,27 @@ from .memory import load_prefs
 
 logger = logging.getLogger(__name__)
 
+
+# ── Deal Confidence Verdict ───────────────────────────────────────────────────
+# Maps a final (possibly trust/boost-multiplied) score to a plain-English verdict.
+# Color tokens are CSS-friendly hex strings for the frontend to use directly.
+
+_VERDICT_TABLE = [
+    (0.80, "Excellent deal. Buy now.",   "#34d399"),  # emerald
+    (0.65, "Good value.",                "#a78bfa"),  # violet
+    (0.45, "Decent pick.",               "#fbbf24"),  # amber
+    (0.25, "Wait for a sale.",           "#fb923c"),  # orange
+    (0.00, "Overpriced.",               "#f87171"),  # red
+]
+
+
+def deal_verdict(score: float) -> tuple[str, str]:
+    """Return (verdict_text, colour_hex) for a given score in [0, 1]."""
+    for threshold, text, colour in _VERDICT_TABLE:
+        if score >= threshold:
+            return text, colour
+    return _VERDICT_TABLE[-1][1], _VERDICT_TABLE[-1][2]
+
 WEIGHTS = {
     "price":        0.45,
     "rating":       0.35,
@@ -258,12 +279,17 @@ def compare_agent(state: AgentState, user_id: str = "demo") -> dict:
         rating_verified = product.pop("_rating_verified", True)
         adj_rating      = product.get("_adj_rating", product.get("rating", 0))
 
+        capped_score = min(1.0, round(base, 4))
+        verdict_text, verdict_colour = deal_verdict(capped_score)
+
         scored_product = {
             **product,
             "_adj_rating":    adj_rating,
             # Cap at 1.0: trust/boost multipliers can exceed 1.0 but
             # relative ordering is preserved; existing tests expect [0, 1].
-            "score":          min(1.0, round(base, 4)),
+            "score":          capped_score,
+            "verdict":        verdict_text,
+            "verdict_colour": verdict_colour,
             "rating_verified": rating_verified,
             "score_breakdown": {
                 "price_score":  round(price_scores[i], 4),

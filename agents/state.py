@@ -14,6 +14,7 @@ class AgentState(TypedDict):
     scored_products:  list[dict]   # products with 'score' field, sorted desc
     recommendation:   dict         # top product + 'justification' key
     error:            Optional[str]
+    budget_miss:      Optional[dict]  # set when no results found within budget
 
 
 def initial_state(query: str) -> AgentState:
@@ -24,4 +25,5 @@ def initial_state(query: str) -> AgentState:
         "scored_products":  [],
         "recommendation":   {},
         "error":            None,
+        "budget_miss":      None,
     }

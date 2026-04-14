@@ -11,7 +11,7 @@ import { TerminalShowcase } from '@/components/landing/TerminalShowcase';
 
 export default function LandingPage() {
   return (
-    <div className="relative min-h-screen bg-[#050508] text-white selection:bg-violet-500/50 overflow-x-hidden font-sans">
+    <div className="relative min-h-screen bg-[#050508] text-white selection:bg-violet-500/50 font-sans w-full">
       
       {/* Noise Texture Overlay */}
       <div 

@@ -78,7 +78,7 @@ export function HeroSection() {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && query.trim()) {
-                 window.location.href = `/?q=${encodeURIComponent(query)}`;
+                 window.location.href = `/search?q=${encodeURIComponent(query)}`;
               }
             }}
           />
@@ -86,7 +86,7 @@ export function HeroSection() {
             className="px-8 py-4 bg-violet-600 hover:bg-violet-500 rounded-2xl text-white font-semibold transition-colors flex shrink-0 items-center justify-center gap-2"
             onClick={() => {
               if (query.trim()) {
-                window.location.href = `/?q=${encodeURIComponent(query)}`;
+                window.location.href = `/search?q=${encodeURIComponent(query)}`;
               }
             }}
           >

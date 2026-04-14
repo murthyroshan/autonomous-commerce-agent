@@ -212,8 +212,8 @@ export function ProductCard({
   const y = useMotionValue(0)
   const mouseXSpring = useSpring(x, { stiffness: 150, damping: 20 })
   const mouseYSpring = useSpring(y, { stiffness: 150, damping: 20 })
-  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], [15, -15])
-  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], [-15, 15])
+  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], [4, -4])
+  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], [-4, 4])
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!ref.current) return
@@ -332,11 +332,31 @@ export function ProductCard({
       </div>
 
       <div style={{ transform: 'translateZ(40px)' }} className="mt-4 relative z-20">
+        {/* Deal Confidence Verdict */}
+        {product.verdict && (
+          <div className="mb-2">
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
+              style={{
+                background: `${product.verdict_colour ?? '#a78bfa'}18`,
+                color: product.verdict_colour ?? '#a78bfa',
+                border: `1px solid ${product.verdict_colour ?? '#a78bfa'}40`,
+              }}
+            >
+              <span
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{ background: product.verdict_colour ?? '#a78bfa' }}
+              />
+              {product.verdict}
+            </span>
+          </div>
+        )}
+        {/* Score bar */}
         <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-xs" style={{ color: '#52525b' }}>Match score</span>
-          <span className="text-xs font-semibold" style={{ color: '#a78bfa' }}>{scorePercent}%</span>
+          <span className="text-xs" style={{ color: '#3f3f46' }}>Match score</span>
+          <span className="text-xs" style={{ color: '#52525b' }}>{scorePercent}%</span>
         </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: '#222' }}>
+        <div className="h-1 w-full overflow-hidden rounded-full" style={{ background: '#1a1a1a' }}>
           <div className="score-bar-fill" style={{ width: `${barWidth}%` }} />
         </div>
       </div>
