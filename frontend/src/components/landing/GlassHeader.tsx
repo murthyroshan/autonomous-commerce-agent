@@ -22,7 +22,7 @@ export function GlassHeader() {
              <a href="https://lora.algokit.io/testnet" target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-zinc-400 hidden md:block select-none cursor-pointer hover:text-violet-400 transition-colors uppercase tracking-widest">Lora Explorer</a>
              
              <button 
-                onClick={() => window.location.href = '/'}
+                onClick={() => window.location.href = '/search'}
                 className="bg-white hover:bg-zinc-200 text-black px-6 py-2 rounded-full font-bold text-xs uppercase tracking-widest transition-all hover:scale-105 shadow-[0_0_20px_rgba(255,255,255,0.15)]"
              >
                 Start

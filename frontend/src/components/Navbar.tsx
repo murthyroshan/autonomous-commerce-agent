@@ -131,7 +131,7 @@ function AnimatedLogo() {
 
 const NAV_LINKS = [
   { name: 'Home', href: '/' },
-  { name: 'About', href: '/landing' },
+  { name: 'Search', href: '/search' },
   { name: 'History', href: '/history' },
   { name: 'Watchlist', href: '/watchlist' },
 ]
@@ -178,7 +178,7 @@ export function Navbar() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   if (!mounted) return null
-  if (pathname === '/landing') return null
+  if (pathname === '/') return null
 
   return (
     <motion.header

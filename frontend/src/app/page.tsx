@@ -1,139 +1,79 @@
-'use client'
+'use client';
+import { CursorGlow } from '@/components/landing/CursorGlow';
+import { HorizontalTicker } from '@/components/landing/HorizontalTicker';
+import { HeroSection } from '@/components/landing/HeroSection';
+import { BlockchainStrip } from '@/components/landing/BlockchainStrip';
+import { LiveToast } from '@/components/landing/LiveToast';
+import { GlassHeader } from '@/components/landing/GlassHeader';
+import { BattleModeCard } from '@/components/landing/BattleModeCard';
+import { NegotiationCard } from '@/components/landing/NegotiationCard';
+import { TerminalShowcase } from '@/components/landing/TerminalShowcase';
 
-import { useState, useEffect } from 'react'
-import { useAgentStream } from '@/hooks/useAgentStream'
-import { ChatFlow } from '@/components/ChatFlow'
-import { StatusTicker } from '@/components/StatusTicker'
-import { ErrorBanner } from '@/components/ErrorBanner'
-import { ProductGrid } from '@/components/ProductGrid'
-import { motion } from 'framer-motion'
-import { WarpBackground } from '@/components/WarpBackground'
-
-export default function HomePage() {
-  const [query, setQuery] = useState<string | null>(null)
-
-  useEffect(() => {
-    // Read the query parameter passed from the landing page
-    const params = new URLSearchParams(window.location.search);
-    const q = params.get('q');
-    if (q) {
-      setQuery(q);
-    }
-  }, []);
-
-  const { status, result, loading, streamError } = useAgentStream(query)
-
-  // Merge backend pipeline error with SSE transport error.
-  // Don't surface "Mock mode — MOCK_ONLY=true" as a user-visible error.
-  const rawError = streamError ?? result?.error ?? null
-  const displayError =
-    rawError && !rawError.toLowerCase().includes('mock mode') ? rawError : null
-
+export default function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-transparent text-white overflow-x-hidden pt-10">
-      <section className="relative flex flex-col items-center justify-center px-4 pt-32 pb-4 text-center z-10">
-        {/* Pill badge */}
-        <div
-          className="mb-6 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium"
-          style={{
-            borderColor: 'rgba(124,58,237,0.4)',
-            background: 'rgba(124,58,237,0.1)',
-            color: '#a78bfa',
-          }}
-        >
-          <span style={{ color: '#7c3aed' }}>✦</span>
-          Powered by Groq + Serper
-        </div>
+    <div className="relative min-h-screen bg-[#050508] text-white selection:bg-violet-500/50 overflow-x-hidden font-sans">
+      
+      {/* Noise Texture Overlay */}
+      <div 
+        className="pointer-events-none fixed inset-0 z-0 opacity-10"
+        style={{
+           backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E\")",
+           backgroundRepeat: 'repeat',
+           backgroundSize: '128px 128px'
+        }}
+      />
 
-        {/* Heading */}
-        <motion.h1
-          initial={{ opacity: 0, y: 30, filter: 'blur(10px)' }}
-          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-          className="mb-3 text-5xl font-black tracking-tight sm:text-7xl text-transparent bg-clip-text bg-gradient-to-br from-white via-white to-white/40"
-        >
-          Find the best product.
-        </motion.h1>
+      {/* Global Background Gradients */}
+      <div className="fixed inset-0 z-[1] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/10 via-[#050508] to-[#050508] pointer-events-none" />
 
-        {/* Subheading */}
-        <motion.p 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 1, ease: [0.16, 1, 0.3, 1] }}
-          className="mb-10 max-w-md text-lg font-medium text-zinc-400"
-        >
-          Describe what you want. The neural agent does the rest.
-        </motion.p>
+      {/* Floating Header */}
+      <GlassHeader />
 
-        {/* Chat flow for search & clarification */}
-        <ChatFlow onSearch={setQuery} disabled={loading} />
+      {/* Mouse Track Glow */}
+      <CursorGlow />
+      <LiveToast />
 
-        {/* Status + error */}
-        <div className="mt-5 flex w-full max-w-2xl flex-col items-center gap-3">
-          <StatusTicker status={status} loading={loading} />
-          <ErrorBanner error={displayError} />
-        </div>
-      </section>
+      {/* The Parallax Ticker Feed */}
+      <HorizontalTicker />
 
-      {/* ── Results ────────────────────────────────────────────────────────── */}
-      {result?.scored_products && result.scored_products.length > 0 && (
-        <section className="flex-1 px-4 pb-20 pt-10 max-w-7xl mx-auto w-full">
-          <ProductGrid
-            products={result.scored_products}
-            recommendation={result.recommendation}
-          />
-        </section>
-      )}
-
-      {/* ── Empty state ────────────────────────────────────────────────────── */}
-      {!query && !loading && (
-        <div className="flex flex-col items-center justify-start mt-2 pb-32 text-center px-4">
-          <div
-            className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl text-4xl"
-            style={{
-              background: 'rgba(124,58,237,0.08)',
-              border: '1px solid rgba(124,58,237,0.2)',
-            }}
-          >
-            🛍️
+      {/* Hero Content (Centered) */}
+      <div className="relative z-10 w-full min-h-screen pt-12 flex flex-col justify-between">
+          <div className="absolute inset-0 bg-gradient-to-b from-[#050508]/20 via-transparent to-[#050508] pointer-events-none z-0" />
+          <HeroSection />
+          <div className="w-full mt-auto relative z-20">
+             <BlockchainStrip />
           </div>
-          <p className="text-sm mb-1" style={{ color: '#52525b' }}>
-            Try searching for something like:
-          </p>
-          <div className="flex flex-wrap justify-center gap-2 mt-2">
-            {[
-              'gaming laptop under ₹80,000',
-              'wireless earbuds under ₹5,000',
-              'smartwatch under ₹10,000',
-              '4K TV under ₹40,000',
-            ].map((ex, i) => (
-              <motion.button
-                key={ex}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.5 + i * 0.1, type: 'spring', stiffness: 200, damping: 15 }}
-                whileHover={{ scale: 1.05, borderColor: 'rgba(139, 92, 246, 0.5)', backgroundColor: 'rgba(139, 92, 246, 0.1)' }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setQuery(ex)}
-                className="group relative overflow-hidden rounded-full border border-white/10 bg-white/5 backdrop-blur-md px-4 py-2 text-xs font-semibold text-zinc-300 transition-colors cursor-pointer"
-              >
-                {/* sweeping highlight */}
-                <div className="absolute inset-0 -translate-x-[150%] bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-[150%]" />
-                <span className="relative z-10">{ex}</span>
-              </motion.button>
-            ))}
-          </div>
-        </div>
-      )}
+      </div>
 
-      {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="py-8 text-center text-xs" style={{ color: '#3f3f46' }}>
-        <span>KartIQ · Built with FastAPI, Groq, Serper &amp; Algorand</span>
-      </footer>
+      {/* Below the fold sections */}
+      <div className="relative z-20 w-full bg-[#050508] pt-32 px-4 flex flex-col items-center">
+         <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-white mb-20 text-center shadow-black drop-shadow-2xl">
+            How the agent outsmarts the market
+         </h2>
+         
+         <div className="max-w-6xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+             <BattleModeCard />
+             <NegotiationCard />
+         </div>
+
+         {/* Raw Developer Payload */}
+         <TerminalShowcase />
+
+         {/* Final Massive CTA */}
+         <div className="w-full max-w-4xl border-t border-violet-500/10 mt-16 pt-40 pb-48 flex flex-col items-center text-center">
+             <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-zinc-600 tracking-tighter mb-12">
+               Stop scrolling.<br />
+               <span className="text-violet-500">Deploy agents.</span>
+             </h1>
+             <button 
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="px-10 py-5 bg-white text-black font-extrabold rounded-full hover:scale-105 transition-transform hover:bg-zinc-200 shadow-[0_10px_40px_rgba(255,255,255,0.2)] text-lg tracking-wider uppercase"
+             >
+                Return to Search
+             </button>
+         </div>
+      </div>
+
     </div>
-  )
+  );
 }
-
-
-
-
