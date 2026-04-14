@@ -8,6 +8,7 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 interface ChatFlowProps {
   onSearch: (query: string) => void
   disabled?: boolean
+  initialQuery?: string
 }
 
 type FlowState = 'IDLE' | 'CLARIFYING' | 'SEARCHING'
@@ -27,7 +28,7 @@ async function fetchJsonWithTimeout(
   }
 }
 
-export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
+export function ChatFlow({ onSearch, disabled, initialQuery }: ChatFlowProps) {
   const [flowState, setFlowState] = useState<FlowState>('IDLE')
   const [query, setQuery] = useState('')
   const [enrichedQuery, setEnrichedQuery] = useState('')
@@ -53,10 +54,22 @@ export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
     }
   }, [flowState, questions, revealedIdx])
 
+  // Trigger initial flow if provided via props (e.g. from landing page)
+  useEffect(() => {
+    if (initialQuery && initialQuery.trim() !== '') {
+      setQuery(initialQuery)
+      triggerClarify(initialQuery)
+    }
+  }, [initialQuery])
+
   async function handleInitialSearch(e: React.FormEvent) {
     e.preventDefault()
-    const q = query.trim()
-    if (!q || disabled) return
+    triggerClarify(query)
+  }
+
+  async function triggerClarify(q: string) {
+    const qClean = q.trim()
+    if (!qClean || disabled) return
     
     setIsClarifyingLoading(true)
     setQuestions([])
@@ -75,11 +88,11 @@ export function ChatFlow({ onSearch, disabled }: ChatFlowProps) {
         setFlowState('CLARIFYING')
       } else {
         // Go straight to searching
-        triggerFinalSearch(q)
+        triggerFinalSearch(qClean)
       }
     } catch {
       // Fail open on error
-      triggerFinalSearch(q)
+      triggerFinalSearch(qClean)
     } finally {
       setIsClarifyingLoading(false)
     }

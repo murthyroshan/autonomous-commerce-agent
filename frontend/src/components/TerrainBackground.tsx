@@ -7,8 +7,8 @@ import * as THREE from 'three'
 function Terrain() {
   const meshRef = useRef<THREE.Mesh>(null)
   
-  // Create a much larger plane geometry to stretch into the distance
-  const geometry = useMemo(() => new THREE.PlaneGeometry(100, 100, 30, 30), [])
+  // Create a much larger plane geometry to stretch into the distance - highly optimized vertex count
+  const geometry = useMemo(() => new THREE.PlaneGeometry(100, 100, 15, 15), [])
   const material = useMemo(() => new THREE.MeshStandardMaterial({ 
     color: '#000000',
     emissive: '#a855f7', // Brighter Purple
@@ -67,7 +67,7 @@ function Terrain() {
 export function TerrainBackground() {
   return (
     <div className="pointer-events-none fixed inset-0 z-[0] bg-[#050505] overflow-hidden">
-      <Canvas camera={{ position: [0, 2, 5], fov: 60 }} dpr={[1, 1.5]}>
+      <Canvas camera={{ position: [0, 2, 5], fov: 60 }} dpr={1}>
         <fog attach="fog" args={['#050505', 5, 40]} />
         <Terrain />
       </Canvas>

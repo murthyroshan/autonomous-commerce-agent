@@ -15,6 +15,8 @@ class AgentState(TypedDict):
     recommendation:   dict         # top product + 'justification' key
     error:            Optional[str]
     budget_miss:      Optional[dict]  # set when no results found within budget
+    battle_contenders: Optional[list]  # [contender_a, contender_b] for Battle Arena
+    battle_report:    Optional[str]   # LLM referee verdict text
 
 
 def initial_state(query: str) -> AgentState:
@@ -26,4 +28,6 @@ def initial_state(query: str) -> AgentState:
         "recommendation":   {},
         "error":            None,
         "budget_miss":      None,
+        "battle_contenders": None,
+        "battle_report":     None,
     }

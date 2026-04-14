@@ -115,23 +115,53 @@ def _static_justification(product: dict) -> str:
     )
 
 
-def _call_groq(prompt: str, model: str) -> str:
+def _call_groq(prompt: str, model: str, max_tokens: int = 150) -> str:
     """Call Groq API with the given model. Raises on failure."""
     response = _get_groq_client().chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=150,
+        max_tokens=max_tokens,
         temperature=0.4,
     )
     return response.choices[0].message.content.strip()
 
 
+def _build_battle_prompt(a: dict, b: dict) -> str:
+    """Build the head-to-head referee prompt for Battle Mode."""
+    def fmt(p: dict) -> str:
+        drop = p.get("price_drop_pct")
+        hist = p.get("historical_30d_avg")
+        price_note = ""
+        if drop and hist:
+            price_note = f" (↓{drop}% from 30-day avg ₹{hist:,.0f})"
+        return (
+            f"- Name: {p['title']}\n"
+            f"- Price: ₹{p['price']:,.0f}{price_note}\n"
+            f"- Rating: {p.get('_adj_rating', p.get('rating', 0)):.1f}★ "
+            f"({p.get('review_count', 0):,} reviews)\n"
+            f"- Store: {p.get('source', 'Unknown')}\n"
+            f"- AI Score: {p.get('score', 0):.4f}"
+        )
+
+    return (
+        f"You are an expert shopping referee doing a head-to-head product battle.\n\n"
+        f"CONTENDER A:\n{fmt(a)}\n\n"
+        f"CONTENDER B:\n{fmt(b)}\n\n"
+        f"Write a punchy 2-3 sentence 'Tale of the Tape'. "
+        f"Compare them directly on price, value, and where each one wins. "
+        f"End with one declarative sentence declaring the winner by name. "
+        f"Be specific, bold, and direct. Do not use bullet points."
+    )
+
+
 def decision_agent(state: AgentState) -> dict:
     """
     Select the top-scored product and generate a justification.
+    If battle_contenders are set, also generates a head-to-head battle_report.
 
     Returns:
-        {"recommendation": {**top_product, "justification": str}}
+        {"recommendation": {**top_product, "justification": str},
+         "battle_report": str | None}
     """
     scored = state.get("scored_products", [])
     if not scored:
@@ -141,7 +171,7 @@ def decision_agent(state: AgentState) -> dict:
     top = scored[0]
     prompt = _build_prompt(top, scored)
 
-    # Try primary model
+    # Try primary model for standard justification
     try:
         justification = _call_groq(prompt, PRIMARY_MODEL)
         logger.info(f"Decision agent used {PRIMARY_MODEL}")
@@ -156,11 +186,33 @@ def decision_agent(state: AgentState) -> dict:
         logger.warning(f"Groq API error: {e} — using static justification")
         justification = _static_justification(top)
 
+    # Battle report — only if contenders are available
+    battle_report: str | None = None
+    contenders = state.get("battle_contenders")
+    if contenders and len(contenders) == 2:
+        battle_prompt = _build_battle_prompt(contenders[0], contenders[1])
+        try:
+            battle_report = _call_groq(battle_prompt, PRIMARY_MODEL, max_tokens=220)
+            logger.info("Battle report generated successfully")
+        except Exception as e:
+            logger.warning(f"Battle report generation failed: {e}")
+            # Build a static fallback battle report
+            a, b = contenders[0], contenders[1]
+            winner = a if a.get("score", 0) >= b.get("score", 0) else b
+            loser = b if winner is a else a
+            battle_report = (
+                f"Both products are strong contenders in their own right. "
+                f"The {a['title']} leads on price at ₹{a['price']:,.0f} while "
+                f"the {b['title']} counters with a higher score. "
+                f"The winner is {winner['title']}."
+            )
+
     return {
         "recommendation": {
             **top,
             "justification": justification,
             "rank":          1,
             "total_compared": len(scored),
-        }
+        },
+        "battle_report": battle_report,
     }

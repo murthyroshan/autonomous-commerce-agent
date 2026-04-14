@@ -301,6 +301,13 @@ def _parse_serper_response(
         if not _is_relevant(title, category):
             continue
 
+        # Fix broken 'ibp=oshop' links by generating a standard Google Shopping link
+        raw_link = item.get("link", "#")
+        if "ibp=oshop" in raw_link:
+            import urllib.parse
+            safe_title = urllib.parse.quote_plus(title)
+            raw_link = f"https://www.google.com/search?tbm=shop&q={safe_title}"
+
         products.append({
             "title":            title,
             "price":            price,
@@ -309,7 +316,7 @@ def _parse_serper_response(
                                     item.get("ratingCount") or item.get("reviews")
                                 ),
             "source":           item.get("source", "Unknown"),
-            "link":             item.get("link", "#"),
+            "link":             raw_link,
             "has_real_rating":  item.get("rating") is not None,
         })
 
