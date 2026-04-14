@@ -42,10 +42,16 @@ class Recommendation(ProductResult):
 
 
 class SearchResponse(BaseModel):
-    query:            str
-    scored_products:  list[ProductResult]
-    recommendation:   Optional[Recommendation] = None
-    error:            Optional[str] = None
+    query:             str
+    scored_products:   list[ProductResult]
+    recommendation:    Optional[Recommendation] = None
+    error:             Optional[str] = None
+    budget_miss:       Optional[dict] = None
+    battle_contenders: Optional[list] = None
+    battle_report:     Optional[str] = None
+
+    class Config:
+        extra = "allow"  # forward-compatible with new pipeline fields
 
 
 class ConfirmRequest(BaseModel):

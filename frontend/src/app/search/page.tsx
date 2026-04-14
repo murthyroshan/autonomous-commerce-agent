@@ -7,17 +7,19 @@ import { StatusTicker } from '@/components/StatusTicker'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { ProductGrid } from '@/components/ProductGrid'
 import { motion, AnimatePresence } from 'framer-motion'
-import { WarpBackground } from '@/components/WarpBackground'
+import { BattleArena } from '@/components/BattleArena'
 
 export default function HomePage() {
   const [query, setQuery] = useState<string | null>(null)
+
+  const [initialQ, setInitialQ] = useState<string>('')
 
   useEffect(() => {
     // Read the query parameter passed from the landing page
     const params = new URLSearchParams(window.location.search);
     const q = params.get('q');
     if (q) {
-      setQuery(q);
+      setInitialQ(q);
     }
   }, []);
 
@@ -26,6 +28,18 @@ export default function HomePage() {
 
   // Reset dismissed state whenever a new query fires
   useEffect(() => { setDismissedBudgetMiss(false) }, [query])
+
+  // Battle Arena data
+  const battleContenders = result?.battle_contenders ?? null
+  const battleReport = result?.battle_report ?? null
+  const battleWinner = result?.recommendation ?? null
+
+  // For the grid: exclude battle contenders to avoid duplicates
+  const gridProducts = battleContenders && result?.scored_products
+    ? result.scored_products.filter(
+        p => !battleContenders.some(c => c.title === p.title)
+      )
+    : result?.scored_products ?? []
 
   const budgetMiss: BudgetMiss | null =
     !dismissedBudgetMiss && result?.budget_miss ? result.budget_miss : null
@@ -77,7 +91,7 @@ export default function HomePage() {
         </motion.p>
 
         {/* Chat flow for search & clarification */}
-        <ChatFlow onSearch={setQuery} disabled={loading} />
+        <ChatFlow onSearch={setQuery} disabled={loading} initialQuery={initialQ} />
 
         {/* Status + error */}
         <div className="mt-5 flex w-full max-w-2xl flex-col items-center gap-3">
@@ -176,13 +190,25 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* ── Results ────────────────────────────────────────────────────────── */}
+      {/* ── Results ──────────────────────────────────────────────────── */}
       {result?.scored_products && result.scored_products.length > 0 && (
-        <section className="flex-1 px-4 pb-20 pt-10 max-w-7xl mx-auto w-full">
-          <ProductGrid
-            products={result.scored_products}
-            recommendation={result.recommendation}
-          />
+        <section className="flex-1 px-4 pb-20 pt-6 max-w-7xl mx-auto w-full">
+          {/* Battle Arena — always shown when we have 2+ contenders */}
+          {battleContenders && battleContenders.length === 2 && (
+            <BattleArena
+              contenders={battleContenders}
+              battleReport={battleReport}
+              winner={battleWinner}
+            />
+          )}
+
+          {/* Remaining product grid (contenders already excluded) */}
+          {gridProducts.length > 0 && (
+            <ProductGrid
+              products={gridProducts}
+              recommendation={battleContenders ? null : result.recommendation}
+            />
+          )}
         </section>
       )}
 

@@ -73,46 +73,107 @@ async def search_stream(query: str, user_id: str = Query(default="demo")):
             return f"data: {json.dumps(data)}\n\n"
 
         try:
+            from agents.pipeline import _detect_vs_query, _run_single_search, _pin_best_match, _is_relevant
+            is_vs, side_a, side_b = _detect_vs_query(query.strip())
             state = initial_state(query.strip())
 
-            # Step 1: Search
-            yield sse({"type": "status", "message": "Searching products..."})
-            search_result = await asyncio.to_thread(search_agent, state)
-            state.update(search_result)
+            if is_vs:
+                yield sse({"type": "status", "message": f"Organizing matchup: {side_a} vs {side_b}..."})
+                
+                def run_dual_search():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                        fut_a = executor.submit(_run_single_search, side_a)
+                        fut_b = executor.submit(_run_single_search, side_b)
+                        return fut_a.result(), fut_b.result()
 
-            if not state["search_results"]:
-                # Smart Budget Negotiation: emit nudge instead of plain error
-                if state.get("budget_miss"):
-                    yield sse({
-                        "type":         "result",
-                        "query":        state["query"],
-                        "scored_products": [],
-                        "recommendation":  None,
-                        "budget_miss":  state["budget_miss"],
-                        "error":        state.get("error"),
-                    })
-                else:
-                    yield sse({"type": "error", "message": state.get("error", "No products found")})
-                return
+                results_a, results_b = await asyncio.to_thread(run_dual_search)
+                
+                if not results_a and not results_b:
+                    yield sse({"type": "error", "message": f"No products found for '{side_a}' or '{side_b}'"})
+                    return
 
-            # Step 2: Compare (Phase 6: pass user_id)
-            yield sse({"type": "status", "message": f"Comparing {len(state['search_results'])} products..."})
-            compare_result = await asyncio.to_thread(compare_agent, state, user_id)
-            state.update(compare_result)
+                # Pin the BEST TITLE-MATCHING product from each side's pool
+                # (prevents "oneplus 12" from pinning to an "oneplus 12r" result)
+                contender_a = _pin_best_match(side_a, results_a) if results_a else None
+                contender_b = _pin_best_match(side_b, results_b) if results_b else None
 
-            # Step 3: Decision
-            yield sse({"type": "status", "message": "Generating recommendation..."})
-            decision_result = await asyncio.to_thread(decision_agent, state)
-            state.update(decision_result)
+                # Guard: if both sides pinned to the same product, use pool fallback
+                if (
+                    contender_a and contender_b
+                    and contender_a["title"] == contender_b["title"]
+                ):
+                    contender_a = results_a[0] if results_a else None
+                    b_pool = [p for p in results_b if p["title"] != (contender_a or {}).get("title")]
+                    contender_b = b_pool[0] if b_pool else (results_b[0] if results_b else None)
+
+                all_products = results_a + results_b
+                all_products.sort(key=lambda x: x.get("score", 0), reverse=True)
+                # Deduplicate by title (keep first occurrence = highest score) and strict filter
+                seen: set[str] = set()
+                deduped: list[dict] = []
+                for p in all_products:
+                    if p["title"] not in seen and _is_relevant(p["title"], side_a, side_b):
+                        seen.add(p["title"])
+                        deduped.append(p)
+
+                state["search_results"] = deduped
+                state["scored_products"] = deduped
+
+                if contender_a and contender_b:
+                    state["battle_contenders"] = [contender_a, contender_b]
+
+                yield sse({"type": "status", "message": "Referee evaluating matchup..."})
+                decision_result = await asyncio.to_thread(decision_agent, state)
+                state.update(decision_result)
+
+            else:
+                # ── Standard Mode ──
+                # Step 1: Search
+                yield sse({"type": "status", "message": "Searching products..."})
+                search_result = await asyncio.to_thread(search_agent, state)
+                state.update(search_result)
+
+                if not state["search_results"]:
+                    # Smart Budget Negotiation: emit nudge instead of plain error
+                    if state.get("budget_miss"):
+                        yield sse({
+                            "type":         "result",
+                            "query":        state["query"],
+                            "scored_products": [],
+                            "recommendation":  None,
+                            "budget_miss":  state["budget_miss"],
+                            "error":        state.get("error"),
+                        })
+                    else:
+                        yield sse({"type": "error", "message": state.get("error", "No products found")})
+                    return
+
+                # Step 2: Compare
+                yield sse({"type": "status", "message": f"Comparing {len(state['search_results'])} products..."})
+                compare_result = await asyncio.to_thread(compare_agent, state, user_id)
+                state.update(compare_result)
+
+                # Extract battlefield contenders for standard mode
+                scored = state.get("scored_products", [])
+                if len(scored) >= 2:
+                    state["battle_contenders"] = [scored[0], scored[1]]
+
+                # Step 3: Decision
+                yield sse({"type": "status", "message": "Generating recommendation..."})
+                decision_result = await asyncio.to_thread(decision_agent, state)
+                state.update(decision_result)
 
             # Final result
             yield sse({
-                "type":            "result",
-                "query":           state["query"],
-                "scored_products": state.get("scored_products", []),
-                "recommendation":  state.get("recommendation"),
-                "budget_miss":     state.get("budget_miss"),
-                "error":           state.get("error"),
+                "type":             "result",
+                "query":            state["query"],
+                "scored_products":  state.get("scored_products", []),
+                "recommendation":   state.get("recommendation"),
+                "budget_miss":      state.get("budget_miss"),
+                "battle_contenders": state.get("battle_contenders"),
+                "battle_report":    state.get("battle_report"),
+                "error":            state.get("error"),
             })
 
         except Exception as e:

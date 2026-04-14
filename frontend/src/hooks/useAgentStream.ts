@@ -18,6 +18,10 @@ export interface ScoredProduct {
   rating_verified?: boolean
   /** Raw signal from Serper — false means rating was missing in API response */
   has_real_rating?: boolean
+  /** Synthetic 30-day historical average price (Price History Context) */
+  historical_30d_avg?: number | null
+  /** % drop from 30-day average — positive means current price is lower */
+  price_drop_pct?: number | null
 }
 
 export interface Recommendation extends ScoredProduct {
@@ -40,6 +44,10 @@ export interface StreamResult {
   scored_products: ScoredProduct[]
   recommendation: Recommendation | null
   budget_miss?: BudgetMiss | null
+  /** Two top contenders for the Battle Arena */
+  battle_contenders?: ScoredProduct[] | null
+  /** LLM referee verdict from decision_agent */
+  battle_report?: string | null
   error: string | null
 }
 

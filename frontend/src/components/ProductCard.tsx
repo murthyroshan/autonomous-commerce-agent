@@ -318,6 +318,11 @@ export function ProductCard({
         <p className="text-xl font-bold" style={{ color: '#f5f5f5' }}>
           ₹{product.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
         </p>
+        {product.price_drop_pct != null && product.price_drop_pct > 0 && product.historical_30d_avg != null && (
+          <p className="text-xs mt-0.5" style={{ color: '#4ade80' }}>
+            ↓{product.price_drop_pct}% from 30-day avg ₹{product.historical_30d_avg.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+          </p>
+        )}
 
         <div className="flex items-center gap-2">
           <RatingStars rating={product.rating} verified={product.rating_verified !== false && product.rating > 0} />

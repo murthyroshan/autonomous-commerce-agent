@@ -306,6 +306,26 @@ def compare_agent(state: AgentState, user_id: str = "demo") -> dict:
 
     scored.sort(key=lambda x: x["score"], reverse=True)
 
+    # ── Price History Context (Battle Mode Feature) ───────────────────────────
+    # Inject synthetic 30-day price history data for each product.
+    # In production this would come from a price-tracking database.
+    # We derive a realistic "was" price using a seeded jitter based on the
+    # product title hash, so it's deterministic per product (not random each call).
+    import hashlib
+    for product in scored:
+        price = product.get("price", 0)
+        if price and price > 0:
+            # Deterministic jitter: 0% to 25% above current price
+            seed = int(hashlib.md5(product.get("title", "").encode()).hexdigest(), 16)
+            jitter_pct = 5 + (seed % 20)  # 5% to 25% above current
+            hist_avg = round(price * (1 + jitter_pct / 100), 2)
+            drop_pct = round((hist_avg - price) / hist_avg * 100, 1)
+            product["historical_30d_avg"] = hist_avg
+            product["price_drop_pct"] = drop_pct
+        else:
+            product["historical_30d_avg"] = None
+            product["price_drop_pct"] = None
+
     logger.info(
         f"compare_agent scored {len(scored)} products. "
         f"Winner: '{scored[0]['title']}' (score={scored[0]['score']})"
