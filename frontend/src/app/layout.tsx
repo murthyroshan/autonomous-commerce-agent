@@ -11,9 +11,9 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Kartiq — AI Shopping Agent',
+  title: 'KartIQ — AI Shopping Agent',
   description:
-    'Describe what you want. Kartiq searches, compares, and recommends the best product for your budget — powered by Groq, Serper, and Algorand.',
+    'Describe what you want. KartIQ searches, compares, and recommends the best product for your budget — powered by Groq, Serper, and Algorand.',
   icons: {
     icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛍️</text></svg>',
   },

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAgentStream } from '@/hooks/useAgentStream'
 import { ChatFlow } from '@/components/ChatFlow'
 import { StatusTicker } from '@/components/StatusTicker'
@@ -11,6 +11,16 @@ import { WarpBackground } from '@/components/WarpBackground'
 
 export default function HomePage() {
   const [query, setQuery] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Read the query parameter passed from the landing page
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (q) {
+      setQuery(q);
+    }
+  }, []);
+
   const { status, result, loading, streamError } = useAgentStream(query)
 
   // Merge backend pipeline error with SSE transport error.
@@ -118,7 +128,7 @@ export default function HomePage() {
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer className="py-8 text-center text-xs" style={{ color: '#3f3f46' }}>
-        <span>Kartiq · Built with FastAPI, Groq, Serper &amp; Algorand</span>
+        <span>KartIQ · Built with FastAPI, Groq, Serper &amp; Algorand</span>
       </footer>
     </div>
   )
