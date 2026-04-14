@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAgentStream } from '@/hooks/useAgentStream'
+import { useAgentStream, type BudgetMiss } from '@/hooks/useAgentStream'
 import { ChatFlow } from '@/components/ChatFlow'
 import { StatusTicker } from '@/components/StatusTicker'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { ProductGrid } from '@/components/ProductGrid'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { WarpBackground } from '@/components/WarpBackground'
 
 export default function HomePage() {
@@ -22,15 +22,26 @@ export default function HomePage() {
   }, []);
 
   const { status, result, loading, streamError } = useAgentStream(query)
+  const [dismissedBudgetMiss, setDismissedBudgetMiss] = useState(false)
+
+  // Reset dismissed state whenever a new query fires
+  useEffect(() => { setDismissedBudgetMiss(false) }, [query])
+
+  const budgetMiss: BudgetMiss | null =
+    !dismissedBudgetMiss && result?.budget_miss ? result.budget_miss : null
 
   // Merge backend pipeline error with SSE transport error.
-  // Don't surface "Mock mode — MOCK_ONLY=true" as a user-visible error.
+  // Don't surface "Mock mode — MOCK_ONLY=true" or budget_miss messages as top-level errors.
   const rawError = streamError ?? result?.error ?? null
   const displayError =
-    rawError && !rawError.toLowerCase().includes('mock mode') ? rawError : null
+    rawError &&
+    !rawError.toLowerCase().includes('mock mode') &&
+    !budgetMiss  // budget_miss has its own UI; suppress the duplicate error banner
+      ? rawError
+      : null
 
   return (
-    <div className="flex min-h-screen flex-col bg-transparent text-white overflow-x-hidden pt-10">
+    <div className="flex min-h-screen flex-col bg-transparent text-white pt-10">
       <section className="relative flex flex-col items-center justify-center px-4 pt-32 pb-4 text-center z-10">
         {/* Pill badge */}
         <div
@@ -74,6 +85,96 @@ export default function HomePage() {
           <ErrorBanner error={displayError} />
         </div>
       </section>
+
+      {/* ── Budget Miss Nudge ───────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {budgetMiss && !loading && (
+          <motion.section
+            key="budget-miss"
+            initial={{ opacity: 0, y: 32, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 22 }}
+            className="flex justify-center px-4 pb-4 pt-2"
+          >
+            <div
+              className="relative w-full max-w-xl overflow-hidden rounded-2xl p-5"
+              style={{
+                background: 'rgba(251,146,60,0.05)',
+                border: '1px solid rgba(251,146,60,0.25)',
+              }}
+            >
+              {/* Glow strip */}
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 h-px"
+                style={{ background: 'linear-gradient(90deg, transparent, rgba(251,146,60,0.6), transparent)' }}
+              />
+
+              <div className="mb-3 flex items-start gap-3">
+                <span className="text-2xl leading-none" aria-hidden>💸</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold mb-0.5" style={{ color: '#fb923c' }}>
+                    Nothing in your budget
+                  </p>
+                  <p className="text-xs leading-relaxed" style={{ color: '#a1a1aa' }}>
+                    {budgetMiss.message}
+                  </p>
+                </div>
+              </div>
+
+              {/* Closest product preview */}
+              <div
+                className="mb-4 flex items-center justify-between rounded-xl px-3 py-2.5 gap-2"
+                style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}
+              >
+                <span className="text-xs line-clamp-1 font-medium" style={{ color: '#d4d4d8' }}>
+                  {budgetMiss.product.title}
+                </span>
+                <span className="shrink-0 text-sm font-bold" style={{ color: '#fb923c' }}>
+                  ₹{budgetMiss.product.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </span>
+              </div>
+
+              {/* Overage chip */}
+              <div className="mb-4 flex items-center gap-2">
+                <span
+                  className="rounded-full px-2.5 py-0.5 text-xs font-medium"
+                  style={{ background: 'rgba(251,146,60,0.12)', color: '#fb923c', border: '1px solid rgba(251,146,60,0.25)' }}
+                >
+                  +₹{budgetMiss.overage.toLocaleString('en-IN', { maximumFractionDigits: 0 })} over budget
+                </span>
+                <span className="text-xs" style={{ color: '#52525b' }}>
+                  ({budgetMiss.overage_pct}% stretch)
+                </span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2">
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => setQuery(budgetMiss.product.title)}
+                  className="flex-1 rounded-xl px-4 py-2.5 text-xs font-bold transition-opacity hover:opacity-90"
+                  style={{
+                    background: 'linear-gradient(135deg, #fb923c, #ea580c)',
+                    color: '#fff',
+                  }}
+                >
+                  ⚡ Worth it — show me
+                </motion.button>
+                <button
+                  onClick={() => setDismissedBudgetMiss(true)}
+                  className="rounded-xl px-3 py-2.5 text-xs font-medium transition-colors"
+                  style={{ background: 'rgba(39,39,42,0.6)', color: '#71717a', border: '1px solid #2a2a2a' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#a1a1aa')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#71717a')}
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </motion.section>
+        )}
+      </AnimatePresence>
 
       {/* ── Results ────────────────────────────────────────────────────────── */}
       {result?.scored_products && result.scored_products.length > 0 && (

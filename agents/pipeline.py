@@ -39,6 +39,12 @@ def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
     # Agent 1: Search
     state.update(search_agent(state))
     if not state["search_results"]:
+        # Smart Budget Negotiation: propagate budget_miss instead of a plain error
+        if state.get("budget_miss"):
+            logger.info(
+                f"Pipeline returning budget_miss nudge: {state['budget_miss']['message']}"
+            )
+            return state
         logger.warning("Pipeline stopping: search returned no results")
         return {**state, "error": state.get("error") or "No products found"}
 

@@ -81,7 +81,18 @@ async def search_stream(query: str, user_id: str = Query(default="demo")):
             state.update(search_result)
 
             if not state["search_results"]:
-                yield sse({"type": "error", "message": state.get("error", "No products found")})
+                # Smart Budget Negotiation: emit nudge instead of plain error
+                if state.get("budget_miss"):
+                    yield sse({
+                        "type":         "result",
+                        "query":        state["query"],
+                        "scored_products": [],
+                        "recommendation":  None,
+                        "budget_miss":  state["budget_miss"],
+                        "error":        state.get("error"),
+                    })
+                else:
+                    yield sse({"type": "error", "message": state.get("error", "No products found")})
                 return
 
             # Step 2: Compare (Phase 6: pass user_id)
@@ -100,13 +111,13 @@ async def search_stream(query: str, user_id: str = Query(default="demo")):
                 "query":           state["query"],
                 "scored_products": state.get("scored_products", []),
                 "recommendation":  state.get("recommendation"),
+                "budget_miss":     state.get("budget_miss"),
                 "error":           state.get("error"),
             })
 
         except Exception as e:
             logger.error(f"Stream error: {e}", exc_info=True)
             yield sse({"type": "error", "message": f"Pipeline error: {str(e)}"})
-
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",

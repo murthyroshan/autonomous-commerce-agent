@@ -396,6 +396,12 @@ def search_agent(state: AgentState) -> dict:
     Search for products matching the query.
     Falls through Serper → Groq → Mock on failure.
     Always returns {"search_results": [...]} with optional "error" key.
+
+    Smart Budget Negotiation (Feature 2):
+        If no products are found within the extracted budget, the agent
+        performs a second uncapped search, picks the closest product
+        above budget, and returns a ``budget_miss`` dict so the pipeline
+        can surface a helpful nudge instead of an empty state.
     """
     query    = state["query"]
     budget   = _extract_budget(query)
@@ -416,52 +422,103 @@ def search_agent(state: AgentState) -> dict:
             error = f"Limited results for this budget — showing {len(mock_results)} product(s)"
         return {"search_results": mock_results, "error": error}
 
-    # Tier 1: Serper.dev
-    if os.getenv("SERPER_API_KEY"):
-        try:
-            results = _call_serper(query, max_price=budget, category=category)
-            logger.info(f"Serper returned {len(results)} products for '{query}'")
+    def _do_search(max_price: float | None) -> tuple[list[dict], bool]:
+        """Run the full Serper → Groq → Mock waterfall with the given cap.
 
-            # Broaden if too few results
-            if len(results) < 3 and budget:
-                logger.info("Too few results — retrying with broader query")
-                broader = _broaden_query(query)
-                if broader != query:
-                    extra = _call_serper(broader, max_price=budget, category=category)
-                    existing_titles = {p["title"] for p in results}
-                    for p in extra:
-                        if p["title"] not in existing_titles:
-                            results.append(p)
-                            existing_titles.add(p["title"])
+        Returns:
+            (products, used_mock_fallback) — used_mock_fallback=True means
+            both live tiers failed and we fell through to sample data.
+        """
+        if os.getenv("SERPER_API_KEY"):
+            try:
+                results = _call_serper(query, max_price=max_price, category=category)
+                logger.info(f"Serper returned {len(results)} products (cap=₹{max_price})")
 
+                # Broaden if too few results
+                if len(results) < 3 and budget:
+                    logger.info("Too few results — retrying with broader query")
+                    broader = _broaden_query(query)
+                    if broader != query:
+                        extra = _call_serper(broader, max_price=max_price, category=category)
+                        existing_titles = {p["title"] for p in results}
+                        for p in extra:
+                            if p["title"] not in existing_titles:
+                                results.append(p)
+                                existing_titles.add(p["title"])
 
-            if results:
-                out: dict = {"search_results": results}
-                if len(results) < 3:
-                    out["error"] = f"Limited results for this budget — showing {len(results)} product(s)"
-                return out
-            logger.warning("Serper returned 0 products — trying Groq fallback")
-        except (RetryError, Exception) as e:
-            logger.warning(f"Serper failed after retries: {e} — trying Groq fallback")
-    else:
-        logger.warning("SERPER_API_KEY not set — skipping Serper tier")
+                if results:
+                    return results, False
+                logger.warning("Serper returned 0 products")
+            except (RetryError, Exception) as e:
+                logger.warning(f"Serper failed: {e}")
+        else:
+            logger.warning("SERPER_API_KEY not set — skipping Serper tier")
 
-    # Tier 2: Groq web search
-    if os.getenv("GROQ_API_KEY"):
-        try:
-            results = _call_groq_search(query, max_price=budget, category=category)
-            if results:
-                logger.info(f"Groq fallback returned {len(results)} products")
-                return {
-                    "search_results": results,
-                    "error": "Using Groq web search (Serper unavailable)",
-                }
-        except Exception as e:
-            logger.warning(f"Groq search fallback failed: {e} — using mock data")
-    else:
-        logger.warning("GROQ_API_KEY not set — skipping Groq fallback tier")
+        if os.getenv("GROQ_API_KEY"):
+            try:
+                results = _call_groq_search(query, max_price=max_price, category=category)
+                if results:
+                    logger.info(f"Groq fallback returned {len(results)} products")
+                    return results, False
+            except Exception as e:
+                logger.warning(f"Groq search fallback failed: {e}")
+        else:
+            logger.warning("GROQ_API_KEY not set — skipping Groq fallback tier")
 
-    # Tier 3: Mock data (always works)
+        mock_results = get_mock_products(query)
+        if max_price:
+            mock_results = [p for p in mock_results if p["price"] <= max_price]
+        return mock_results, True   # <— signals mock fallback to caller
+
+    # ── Primary search (budget-capped) ────────────────────────────────────────────
+    results, used_mock = _do_search(max_price=budget)
+
+    if results:
+        out: dict = {"search_results": results}
+        if used_mock:
+            out["error"] = "Live search unavailable — showing sample data"
+        elif len(results) < 3:
+            out["error"] = f"Limited results for this budget — showing {len(results)} product(s)"
+        return out
+
+    # ── Smart Budget Negotiation (Feature 2) ────────────────────────────────
+    # If budget was given but no products found, try without the cap and surface
+    # the nearest above-budget product as a "Worth the stretch?" nudge.
+    if budget:
+        logger.info(
+            f"No products found under ₹{budget:,.0f} — running uncapped search"
+        )
+        uncapped, _ = _do_search(max_price=None)
+        above_budget = [
+            p for p in uncapped
+            if p["price"] > budget
+        ]
+        if above_budget:
+            # Pick the one closest to the budget
+            closest = min(above_budget, key=lambda p: p["price"] - budget)
+            overage = closest["price"] - budget
+            overage_pct = round(overage / budget * 100, 1)
+            budget_miss = {
+                "product":      closest,
+                "budget":       budget,
+                "overage":      round(overage, 0),
+                "overage_pct":  overage_pct,
+                "message": (
+                    f"Nothing under ₹{budget:,.0f}. "
+                    f"Best option is ₹{closest['price']:,.0f} — "
+                    f"₹{overage:,.0f} above your budget. Worth the stretch?"
+                ),
+            }
+            logger.info(
+                f"Budget miss: closest is '\'{ closest['title']}\'' at ₹{closest['price']:,.0f}"
+            )
+            return {
+                "search_results": [],
+                "budget_miss": budget_miss,
+                "error": budget_miss["message"],
+            }
+
+    # ── Absolute fallback: return whatever mock data we have ────────────────
     logger.info(f"Using mock data for query: '{query}'")
     mock_results = get_mock_products(query)
     if budget:
