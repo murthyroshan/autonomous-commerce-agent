@@ -178,6 +178,7 @@ export function Navbar() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   if (!mounted) return null
+  if (pathname === '/landing') return null
 
   return (
     <motion.header
