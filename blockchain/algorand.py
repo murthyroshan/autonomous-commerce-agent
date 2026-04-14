@@ -117,13 +117,24 @@ def build_unsigned_transaction(product: dict) -> dict:
     """
     from algosdk import mnemonic, account, transaction, encoding
 
-    sender_mnemonic = os.getenv("ALGORAND_MNEMONIC")
-    if not sender_mnemonic:
-        raise ValueError("ALGORAND_MNEMONIC not set")
+    # If frontend provided the user's active wallet address, use it as sender
+    # Otherwise fallback to the backend's default account
+    sender = product.get("sender_address")
+    receiver = os.getenv("ALGORAND_RECEIVER")
 
-    private_key = mnemonic.to_private_key(sender_mnemonic)
-    sender = account.address_from_private_key(private_key)
-    receiver = os.getenv("ALGORAND_RECEIVER", sender)
+    sender_mnemonic = os.getenv("ALGORAND_MNEMONIC")
+    if not sender and not sender_mnemonic:
+        raise ValueError("ALGORAND_MNEMONIC not set and no wallet connected")
+
+    if sender_mnemonic:
+        private_key = mnemonic.to_private_key(sender_mnemonic)
+        if not sender:
+            sender = account.address_from_private_key(private_key)
+        if not receiver:
+            receiver = account.address_from_private_key(private_key)
+            
+    if not receiver:
+        receiver = sender  # fallback: send to self
 
     note_data = {
         "app": "kartiq",
@@ -181,5 +192,5 @@ def submit_signed_transaction(signed_txn_b64: str) -> dict:
 
     return {
         "tx_id": tx_id,
-        "explorer_url": f"https://testnet.algoexplorer.io/tx/{tx_id}",
+        "explorer_url": f"https://lora.algokit.io/testnet/transaction/{tx_id}",
     }

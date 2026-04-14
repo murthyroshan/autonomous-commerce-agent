@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import { Navbar } from '@/components/Navbar'
+import { CustomCursor } from '@/components/CustomCursor'
 
 const inter = Inter({
   variable: '--font-inter',
@@ -17,19 +19,17 @@ export const metadata: Metadata = {
   },
 }
 
+import { TerrainBackground } from '@/components/TerrainBackground'
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="en"
-      className={`${inter.variable} h-full`}
-      style={{ background: '#0a0a0a' }}
-    >
-      <body
-        className="min-h-full flex flex-col antialiased"
-        style={{ background: '#0a0a0a', color: '#f5f5f5' }}
-      >
+    <html lang="en" className={`${inter.variable} h-full`} suppressHydrationWarning>
+      <body className="min-h-full flex flex-col antialiased">
+        <TerrainBackground />
+        <CustomCursor />
+        <Navbar />
         {children}
       </body>
     </html>

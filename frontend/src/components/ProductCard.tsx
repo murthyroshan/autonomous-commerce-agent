@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, useRef } from 'react'
 import type { ScoredProduct } from '@/hooks/useAgentStream'
+import { motion, useMotionValue, useSpring, useTransform, useMotionTemplate } from 'framer-motion'
 import { usePeraWallet } from '@/hooks/usePeraWallet'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
@@ -92,7 +93,7 @@ export function ProductCard({
   const [confirmState, setConfirmState] = useState<ConfirmState>('idle')
   const [txId, setTxId] = useState<string | null>(null)
   const [explorerUrl, setExplorerUrl] = useState<string | null>(null)
-  const { connected, connect, signTransaction } = usePeraWallet()
+  const { address, connected, connect, disconnect, signTransaction } = usePeraWallet()
 
   type WatchState = 'hidden' | 'input' | 'saved'
   const [watchState, setWatchState] = useState<WatchState>('hidden')
@@ -133,19 +134,20 @@ export function ProductCard({
   async function handleConfirm() {
     setConfirmState('connecting')
     try {
+      let activeAddress = address
+      if (!connected || !activeAddress) {
+        activeAddress = await connect()
+        if (!activeAddress) return handleDirectConfirm()
+      }
+
       const prepRes: PrepareResponse = await fetch(`${API}/api/confirm/prepare`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({ ...requestBody, sender_address: activeAddress }),
       }).then((r) => r.json())
 
       if (!prepRes.success || prepRes.fallback || !prepRes.txn_b64) {
         return handleDirectConfirm()
-      }
-
-      if (!connected) {
-        const addr = await connect()
-        if (!addr) return handleDirectConfirm()
       }
 
       setConfirmState('signing')
@@ -204,16 +206,79 @@ export function ProductCard({
     }
   }
 
+  // ── 3D HOLOGRAPHIC PHYSICS ──
+  const ref = useRef<HTMLDivElement>(null)
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+  const mouseXSpring = useSpring(x, { stiffness: 150, damping: 20 })
+  const mouseYSpring = useSpring(y, { stiffness: 150, damping: 20 })
+  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], [15, -15])
+  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], [-15, 15])
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!ref.current) return
+    const rect = ref.current.getBoundingClientRect()
+    const width = rect.width
+    const height = rect.height
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+    const xPct = mouseX / width - 0.5
+    const yPct = mouseY / height - 0.5
+    x.set(xPct)
+    y.set(yPct)
+  }
+
+  const handleMouseLeave = () => {
+    x.set(0)
+    y.set(0)
+  }
+
+  // ── FOIL FILTER FOR WINNER ──
+  const foilGradient = useMotionTemplate`radial-gradient(
+    circle at ${(x.get() + 0.5) * 100}% ${(y.get() + 0.5) * 100}%,
+    rgba(255, 255, 255, 0.2),
+    transparent 60%
+  )`
+
   const winnerStyle = isWinner
-    ? { border: '2px solid #7c3aed', boxShadow: '0 0 28px rgba(124,58,237,0.18)' }
+    ? { border: '1px solid rgba(139, 92, 246, 0.3)' }
     : { border: '1px solid #222' }
 
   return (
-    <div
-      className="animate-fade-in-up card-hover flex flex-col rounded-2xl p-5"
-      style={{ background: '#111', animationDelay: `${index * 80}ms`, ...winnerStyle }}
-    >
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <div style={{ perspective: 1000 }} className="h-full">
+      <motion.div
+        ref={ref}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        initial={{ opacity: 0, y: 50, rotateX: 20 }}
+        animate={{ opacity: 1, y: 0, rotateX: 0 }}
+        transition={{ delay: index * 0.1, type: 'spring', stiffness: 200, damping: 20 }}
+        style={{
+          rotateX,
+          rotateY,
+          transformStyle: 'preserve-3d',
+          background: '#111',
+          ...winnerStyle
+        }}
+        className="relative flex h-full flex-col rounded-2xl p-5 shadow-2xl transition-shadow group/card"
+      >
+        {/* Holographic Inner Glare overlay for Winners */}
+        {isWinner && (
+          <motion.div
+            className="pointer-events-none absolute inset-0 z-10 rounded-2xl mix-blend-overlay transition-opacity group-hover/card:opacity-100"
+            style={{ backgroundImage: foilGradient }}
+          />
+        )}
+        
+        {/* Drop shadow bound to tilt */}
+        {isWinner && (
+          <motion.div
+            className="pointer-events-none absolute -inset-2 z-0 rounded-[2rem] opacity-0 transition-opacity blur-xl bg-purple-500/20 group-hover/card:opacity-100"
+            style={{ transform: 'translateZ(-20px)' }}
+          />
+        )}
+
+        <div style={{ transform: 'translateZ(30px)' }} className="mb-3 flex items-center justify-between gap-2 relative z-20">
         <span
           className="rounded-full px-2.5 py-0.5 text-xs font-medium"
           style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}
@@ -231,7 +296,7 @@ export function ProductCard({
         )}
       </div>
 
-      <h3 className="mb-1 line-clamp-2 text-sm font-semibold leading-snug" style={{ color: '#f5f5f5' }}>
+      <h3 style={{ transform: 'translateZ(40px)' }} className="mb-1 line-clamp-2 text-xl font-bold leading-snug text-[#f5f5f5] relative z-20">
         {product.title}
       </h3>
 
@@ -249,7 +314,7 @@ export function ProductCard({
         </a>
       )}
 
-      <div className="mt-auto flex flex-col gap-1.5">
+      <div style={{ transform: 'translateZ(50px)' }} className="mt-auto flex flex-col gap-1.5 relative z-20">
         <p className="text-xl font-bold" style={{ color: '#f5f5f5' }}>
           ₹{product.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
         </p>
@@ -266,7 +331,7 @@ export function ProductCard({
         </div>
       </div>
 
-      <div className="mt-4">
+      <div style={{ transform: 'translateZ(40px)' }} className="mt-4 relative z-20">
         <div className="mb-1.5 flex items-center justify-between">
           <span className="text-xs" style={{ color: '#52525b' }}>Match score</span>
           <span className="text-xs font-semibold" style={{ color: '#a78bfa' }}>{scorePercent}%</span>
@@ -288,7 +353,44 @@ export function ProductCard({
         </div>
       )}
 
-      <div className="mt-4">
+      <div style={{ transform: 'translateZ(30px)' }} className="mt-4 relative z-20 w-full flex-grow flex flex-col justify-end">
+        {/* ── Wallet identity badge ── */}
+        {confirmState === 'idle' && (
+          <div className="mb-2 flex items-center justify-between gap-2">
+            {connected && address ? (
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="inline-flex h-1.5 w-1.5 rounded-full"
+                  style={{ background: '#34d399' }}
+                />
+                <span className="text-xs" style={{ color: '#6ee7b7' }}>
+                  Pera: {address.slice(0, 4)}…{address.slice(-4)}
+                </span>
+                <button
+                  onClick={disconnect}
+                  className="ml-1 text-[10px] transition-colors"
+                  style={{ color: '#52525b' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
+                  title="Disconnect wallet"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="inline-flex h-1.5 w-1.5 rounded-full"
+                  style={{ background: '#f59e0b' }}
+                />
+                <span className="text-xs" style={{ color: '#78716c' }}>
+                  Wallet not connected
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {confirmState === 'idle' && (
           <button
             id={`confirm-btn-${product.title.slice(0, 20).replace(/\s+/g, '-').toLowerCase()}`}
@@ -307,7 +409,9 @@ export function ProductCard({
               e.currentTarget.style.opacity = '1'
             }}
           >
-            {isWinner ? '⚡ Confirm Purchase' : 'Confirm Purchase'}
+            {connected && address
+              ? isWinner ? '⚡ Sign with Pera' : 'Sign with Pera'
+              : isWinner ? '⚡ Connect & Sign' : 'Connect & Sign'}
           </button>
         )}
 
@@ -409,6 +513,7 @@ export function ProductCard({
           </div>
         )}
       </div>
+      </motion.div>
     </div>
   )
 }

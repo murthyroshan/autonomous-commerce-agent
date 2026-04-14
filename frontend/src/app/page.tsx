@@ -1,18 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { useAgentStream } from '@/hooks/useAgentStream'
 import { ChatFlow } from '@/components/ChatFlow'
 import { StatusTicker } from '@/components/StatusTicker'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { ProductGrid } from '@/components/ProductGrid'
-import { usePeraWallet } from '@/hooks/usePeraWallet'
+import { motion } from 'framer-motion'
+import { WarpBackground } from '@/components/WarpBackground'
 
 export default function HomePage() {
   const [query, setQuery] = useState<string | null>(null)
   const { status, result, loading, streamError } = useAgentStream(query)
-  const { address, connected, connect, disconnect } = usePeraWallet()
 
   // Merge backend pipeline error with SSE transport error.
   // Don't surface "Mock mode — MOCK_ONLY=true" as a user-visible error.
@@ -21,112 +20,8 @@ export default function HomePage() {
     rawError && !rawError.toLowerCase().includes('mock mode') ? rawError : null
 
   return (
-    <div className="flex min-h-screen flex-col" style={{ background: '#0a0a0a' }}>
-      <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 pt-4">
-        <Link
-          href="/"
-          className="group inline-flex items-center gap-2 text-sm font-semibold tracking-tight"
-          style={{ color: '#f5f5f5' }}
-        >
-          <span
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-sm transition-all"
-            style={{
-              background: 'rgba(124,58,237,0.2)',
-              border: '1px solid rgba(124,58,237,0.35)',
-              color: '#c4b5fd',
-              boxShadow: '0 0 16px rgba(124,58,237,0.25)',
-            }}
-          >
-            K
-          </span>
-          <span className="relative">
-            KartIQ
-            <span
-              className="absolute -bottom-1 left-0 h-px w-0 transition-all group-hover:w-full"
-              style={{ background: '#7c3aed' }}
-            />
-          </span>
-        </Link>
-
-        <nav className="flex items-center gap-6">
-          <Link
-            href="/landing"
-            className="text-xs transition-colors"
-            style={{ color: '#a1a1aa' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#c4b5fd')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#a1a1aa')}
-          >
-            About
-          </Link>
-          <Link
-            href="/history"
-            className="text-xs transition-colors"
-            style={{ color: '#a1a1aa' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#c4b5fd')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#a1a1aa')}
-          >
-            History
-          </Link>
-          <Link
-            href="/history#watchlist"
-            className="text-xs transition-colors"
-            style={{ color: '#a1a1aa' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#c4b5fd')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#a1a1aa')}
-          >
-            Watchlist
-          </Link>
-
-          {!connected ? (
-            <button
-              onClick={() => {
-                void connect()
-              }}
-              className="rounded-md border px-3 py-1.5 text-xs transition-colors"
-              style={{ borderColor: '#333', color: '#a1a1aa', background: 'transparent' }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#7c3aed'
-                e.currentTarget.style.color = '#c4b5fd'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#333'
-                e.currentTarget.style.color = '#a1a1aa'
-              }}
-            >
-              Connect Wallet
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span
-                className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs"
-                style={{ borderColor: '#333', color: '#a1a1aa', background: 'transparent' }}
-                title="Wallet connected"
-              >
-                <span className="h-2 w-2 rounded-full" style={{ background: '#22c55e' }} />
-                {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connected'}
-              </span>
-              <button
-                onClick={disconnect}
-                className="rounded-md border px-2.5 py-1.5 text-[11px] transition-colors"
-                style={{ borderColor: '#333', color: '#a1a1aa', background: 'transparent' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#7c3aed'
-                  e.currentTarget.style.color = '#c4b5fd'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#333'
-                  e.currentTarget.style.color = '#a1a1aa'
-                }}
-              >
-                Disconnect
-              </button>
-            </div>
-          )}
-        </nav>
-      </header>
-
-      {/* ── Hero ───────────────────────────────────────────────────────────── */}
-      <section className="gradient-bg flex flex-col items-center justify-center px-4 pt-24 pb-16 text-center">
+    <div className="flex min-h-screen flex-col bg-transparent text-white overflow-x-hidden pt-10">
+      <section className="relative flex flex-col items-center justify-center px-4 pt-32 pb-4 text-center z-10">
         {/* Pill badge */}
         <div
           className="mb-6 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium"
@@ -141,17 +36,24 @@ export default function HomePage() {
         </div>
 
         {/* Heading */}
-        <h1
-          className="mb-3 text-5xl font-extrabold tracking-tight sm:text-6xl"
-          style={{ color: '#f5f5f5', letterSpacing: '-0.03em' }}
+        <motion.h1
+          initial={{ opacity: 0, y: 30, filter: 'blur(10px)' }}
+          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+          className="mb-3 text-5xl font-black tracking-tight sm:text-7xl text-transparent bg-clip-text bg-gradient-to-br from-white via-white to-white/40"
         >
           Find the best product.
-        </h1>
+        </motion.h1>
 
         {/* Subheading */}
-        <p className="mb-10 max-w-md text-base" style={{ color: '#71717a' }}>
-          Describe what you want. The agent does the rest.
-        </p>
+        <motion.p 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 1, ease: [0.16, 1, 0.3, 1] }}
+          className="mb-10 max-w-md text-lg font-medium text-zinc-400"
+        >
+          Describe what you want. The neural agent does the rest.
+        </motion.p>
 
         {/* Chat flow for search & clarification */}
         <ChatFlow onSearch={setQuery} disabled={loading} />
@@ -175,7 +77,7 @@ export default function HomePage() {
 
       {/* ── Empty state ────────────────────────────────────────────────────── */}
       {!query && !loading && (
-        <div className="flex flex-1 flex-col items-center justify-center pb-32 text-center px-4">
+        <div className="flex flex-col items-center justify-start mt-2 pb-32 text-center px-4">
           <div
             className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl text-4xl"
             style={{
@@ -194,27 +96,21 @@ export default function HomePage() {
               'wireless earbuds under ₹5,000',
               'smartwatch under ₹10,000',
               '4K TV under ₹40,000',
-            ].map((ex) => (
-              <button
+            ].map((ex, i) => (
+              <motion.button
                 key={ex}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.5 + i * 0.1, type: 'spring', stiffness: 200, damping: 15 }}
+                whileHover={{ scale: 1.05, borderColor: 'rgba(139, 92, 246, 0.5)', backgroundColor: 'rgba(139, 92, 246, 0.1)' }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => setQuery(ex)}
-                className="rounded-full border px-3 py-1.5 text-xs transition-colors cursor-pointer"
-                style={{
-                  borderColor: '#222',
-                  color: '#71717a',
-                  background: 'transparent',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#7c3aed'
-                  e.currentTarget.style.color = '#a78bfa'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#222'
-                  e.currentTarget.style.color = '#71717a'
-                }}
+                className="group relative overflow-hidden rounded-full border border-white/10 bg-white/5 backdrop-blur-md px-4 py-2 text-xs font-semibold text-zinc-300 transition-colors cursor-pointer"
               >
-                {ex}
-              </button>
+                {/* sweeping highlight */}
+                <div className="absolute inset-0 -translate-x-[150%] bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-[150%]" />
+                <span className="relative z-10">{ex}</span>
+              </motion.button>
             ))}
           </div>
         </div>

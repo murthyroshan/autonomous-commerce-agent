@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type FormEvent, type KeyboardEvent } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 interface SearchBarProps {
   onSearch: (query: string) => void
@@ -9,22 +10,47 @@ interface SearchBarProps {
 
 export function SearchBar({ onSearch, loading }: SearchBarProps) {
   const [value, setValue] = useState('')
+  const [detonating, setDetonating] = useState(false)
+
+  function triggerSearch() {
+    const trimmed = value.trim()
+    if (!trimmed || loading) return
+    
+    setDetonating(true)
+    setTimeout(() => {
+      onSearch(trimmed)
+      setDetonating(false)
+    }, 600) // delay to let shockwave play
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    const trimmed = value.trim()
-    if (trimmed && !loading) onSearch(trimmed)
+    triggerSearch()
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') {
-      const trimmed = value.trim()
-      if (trimmed && !loading) onSearch(trimmed)
+      e.preventDefault()
+      triggerSearch()
     }
   }
 
   return (
-    <form
+    <div className="relative w-full max-w-2xl">
+      <AnimatePresence>
+        {detonating && (
+          <motion.div
+            className="absolute inset-0 z-[10] pointer-events-none rounded-2xl bg-purple-500/30"
+            initial={{ scale: 0, opacity: 0.8 }}
+            animate={{ scale: 1.5, opacity: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+          />
+        )}
+      </AnimatePresence>
+      <motion.form
+        animate={detonating ? { scale: [1, 0.9, 1.1, 1], opacity: [1, 0.5, 1] } : { scale: 1 }}
+        transition={{ duration: 0.5, ease: "easeInOut" }}
       onSubmit={handleSubmit}
       className="flex w-full max-w-2xl items-center gap-0 rounded-2xl overflow-hidden"
       style={{
@@ -116,6 +142,7 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
           'Search'
         )}
       </button>
-    </form>
+    </motion.form>
+    </div>
   )
 }

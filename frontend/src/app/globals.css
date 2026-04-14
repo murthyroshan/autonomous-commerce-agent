@@ -69,6 +69,16 @@
   }
 }
 
+.hide-cursor, .hide-cursor * {
+  cursor: none !important;
+}
+
+@media (pointer: fine) {
+  * {
+    cursor: none !important;
+  }
+}
+
 /* ── Keyframes ─────────────────────────────────────────────────────────────── */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(20px); }

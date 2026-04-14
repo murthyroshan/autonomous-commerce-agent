@@ -55,6 +55,7 @@ class ConfirmRequest(BaseModel):
     link:         str
     score:        Optional[float] = None
     user_id:      str = "demo"
+    sender_address: Optional[str] = None
 
 
 class ConfirmResponse(BaseModel):
