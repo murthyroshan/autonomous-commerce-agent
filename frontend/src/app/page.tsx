@@ -22,36 +22,107 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col" style={{ background: '#0a0a0a' }}>
-      <header className="mx-auto flex w-full max-w-7xl items-center justify-end px-4 pt-4">
-        {!connected ? (
-          <button
-            onClick={() => {
-              void connect()
-            }}
-            className="rounded-md border px-3 py-1.5 text-xs transition-colors"
-            style={{ borderColor: '#333', color: '#a1a1aa', background: 'transparent' }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#7c3aed'
-              e.currentTarget.style.color = '#c4b5fd'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#333'
-              e.currentTarget.style.color = '#a1a1aa'
+      <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 pt-4">
+        <Link
+          href="/"
+          className="group inline-flex items-center gap-2 text-sm font-semibold tracking-tight"
+          style={{ color: '#f5f5f5' }}
+        >
+          <span
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-sm transition-all"
+            style={{
+              background: 'rgba(124,58,237,0.2)',
+              border: '1px solid rgba(124,58,237,0.35)',
+              color: '#c4b5fd',
+              boxShadow: '0 0 16px rgba(124,58,237,0.25)',
             }}
           >
-            Connect Pera
-          </button>
-        ) : (
-          <button
-            onClick={disconnect}
-            className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs transition-colors"
-            style={{ borderColor: '#333', color: '#a1a1aa', background: 'transparent' }}
-            title="Disconnect wallet"
+            K
+          </span>
+          <span className="relative">
+            KartIQ
+            <span
+              className="absolute -bottom-1 left-0 h-px w-0 transition-all group-hover:w-full"
+              style={{ background: '#7c3aed' }}
+            />
+          </span>
+        </Link>
+
+        <nav className="flex items-center gap-6">
+          <Link
+            href="/landing"
+            className="text-xs transition-colors"
+            style={{ color: '#a1a1aa' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#c4b5fd')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#a1a1aa')}
           >
-            <span className="h-2 w-2 rounded-full" style={{ background: '#22c55e' }} />
-            {address ? `${address.slice(0, 6)}...` : 'Connected'}
-          </button>
-        )}
+            About
+          </Link>
+          <Link
+            href="/history"
+            className="text-xs transition-colors"
+            style={{ color: '#a1a1aa' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#c4b5fd')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#a1a1aa')}
+          >
+            History
+          </Link>
+          <Link
+            href="/history#watchlist"
+            className="text-xs transition-colors"
+            style={{ color: '#a1a1aa' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#c4b5fd')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#a1a1aa')}
+          >
+            Watchlist
+          </Link>
+
+          {!connected ? (
+            <button
+              onClick={() => {
+                void connect()
+              }}
+              className="rounded-md border px-3 py-1.5 text-xs transition-colors"
+              style={{ borderColor: '#333', color: '#a1a1aa', background: 'transparent' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#7c3aed'
+                e.currentTarget.style.color = '#c4b5fd'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#333'
+                e.currentTarget.style.color = '#a1a1aa'
+              }}
+            >
+              Connect Wallet
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span
+                className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs"
+                style={{ borderColor: '#333', color: '#a1a1aa', background: 'transparent' }}
+                title="Wallet connected"
+              >
+                <span className="h-2 w-2 rounded-full" style={{ background: '#22c55e' }} />
+                {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connected'}
+              </span>
+              <button
+                onClick={disconnect}
+                className="rounded-md border px-2.5 py-1.5 text-[11px] transition-colors"
+                style={{ borderColor: '#333', color: '#a1a1aa', background: 'transparent' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#7c3aed'
+                  e.currentTarget.style.color = '#c4b5fd'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#333'
+                  e.currentTarget.style.color = '#a1a1aa'
+                }}
+              >
+                Disconnect
+              </button>
+            </div>
+          )}
+        </nav>
       </header>
 
       {/* ── Hero ───────────────────────────────────────────────────────────── */}
@@ -150,30 +221,13 @@ export default function HomePage() {
       )}
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="py-8 text-center text-xs flex flex-col items-center gap-2" style={{ color: '#3f3f46' }}>
-        <div className="flex items-center gap-4">
-          <Link
-            href="/history"
-            className="transition-colors"
-            style={{ color: '#52525b' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#52525b')}
-          >
-            History →
-          </Link>
-          <span style={{ color: '#2a2a2a' }}>·</span>
-          <Link
-            href="/history#watchlist"
-            className="transition-colors"
-            style={{ color: '#52525b' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#a78bfa')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#52525b')}
-          >
-            Watchlist →
-          </Link>
-        </div>
+      <footer className="py-8 text-center text-xs" style={{ color: '#3f3f46' }}>
         <span>Kartiq · Built with FastAPI, Groq, Serper &amp; Algorand</span>
       </footer>
     </div>
   )
 }
+
+
+
+
