@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ExampleQueriesMarquee } from './ExampleQueriesMarquee';
 
 const HEADLINES = [
   "Find the best laptop",
@@ -104,6 +105,10 @@ export function HeroSection() {
              Predicting classification: {query.toLowerCase().includes('laptop') || query.toLowerCase().includes('mac') ? 'Electronics / Computer' : 'Consumer Good'}
            </div>
         )}
+      </div>
+
+      <div className="w-full max-w-5xl translate-y-12 animate-fade-in-up pointer-events-auto">
+         <ExampleQueriesMarquee />
       </div>
     </div>
   );

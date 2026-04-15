@@ -27,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} min-h-screen scroll-smooth`} suppressHydrationWarning>
       <body className="flex flex-col min-h-screen antialiased bg-[#0a0a0a] gradient-bg overflow-x-hidden relative">
+        <TerrainBackground />
         <CustomCursor />
         <Navbar />
         {children}

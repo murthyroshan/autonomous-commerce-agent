@@ -121,7 +121,7 @@ def apply_user_rules(products: list[dict], prefs: dict) -> list[dict]:
 
 # ── Purchase history ──────────────────────────────────────────────────────────
 
-def log_purchase(user_id: str, product: dict, tx_id: Optional[str]) -> None:
+def log_purchase(user_id: str, product: dict, tx_id: Optional[str], app_id: Optional[int] = None, escrow_status: Optional[str] = None) -> None:
     """
     Append one confirmed purchase to history/{user_id}.jsonl.
     Fields written: title, price, source, link, score, tx_id, timestamp (ISO 8601).
@@ -136,6 +136,8 @@ def log_purchase(user_id: str, product: dict, tx_id: Optional[str]) -> None:
         "link":      product.get("link", ""),
         "score":     product.get("score"),
         "tx_id":     tx_id,
+        "app_id":    app_id,
+        "escrow_status": escrow_status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     try:
@@ -145,6 +147,45 @@ def log_purchase(user_id: str, product: dict, tx_id: Optional[str]) -> None:
     except Exception as e:
         logger.error(f"log_purchase({user_id}): write failed — {e}")
         raise
+
+def update_purchase_status(user_id: str, app_id: int, new_status: str) -> None:
+    """
+    Updates the escrow_status of a specific purchase identified by app_id in the user's history jsonl.
+    Since jsonl is append-only, this rewrites the file safely.
+    """
+    path = os.path.join(HISTORY_DIR, f"{user_id}.jsonl")
+    if not os.path.exists(path):
+        return
+        
+    entries = []
+    updated = False
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip(): continue
+            try:
+                entry = json.loads(line)
+                if entry.get("app_id") == app_id:
+                    entry["escrow_status"] = new_status
+                    updated = True
+                entries.append(entry)
+            except json.JSONDecodeError:
+                continue
+                
+    if updated:
+        dir_ = os.path.dirname(os.path.abspath(path))
+        fd, tmp_path = tempfile.mkstemp(dir=dir_, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                for entry in entries:
+                    f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            os.replace(tmp_path, path)
+            logger.info(f"update_purchase_status({user_id}): updated app_id={app_id} to '{new_status}'")
+        except Exception as e:
+            logger.error(f"update_purchase_status({user_id}): rewrite failed — {e}")
+            try: os.unlink(tmp_path)
+            except OSError: pass
+            raise
+
 
 
 def get_history(user_id: str, limit: int = 20) -> list[dict]:
