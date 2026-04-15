@@ -8,11 +8,20 @@ export function CursorGlow() {
   const cursorY = useSpring(-500, springConfig);
 
   useEffect(() => {
+    let ticking = false;
+
     const moveCursor = (e: MouseEvent) => {
-      cursorX.set(e.clientX - 200); // Offset by half to center
-      cursorY.set(e.clientY - 200);
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          cursorX.set(e.clientX - 200); // Offset by half to center
+          cursorY.set(e.clientY - 200);
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
-    window.addEventListener('mousemove', moveCursor);
+
+    window.addEventListener('mousemove', moveCursor, { passive: true });
     return () => window.removeEventListener('mousemove', moveCursor);
   }, []);
 
