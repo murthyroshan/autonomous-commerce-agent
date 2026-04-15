@@ -20,7 +20,7 @@ export function HorizontalTicker() {
   ];
 
   return (
-    <div className="absolute w-[150vw] -left-[25vw] h-full z-0 overflow-hidden flex flex-col justify-center gap-6 opacity-30 transform -rotate-2 select-none pointer-events-auto">
+    <div className="absolute w-[150vw] -left-[25vw] h-full z-0 overflow-hidden flex flex-col justify-center gap-16 opacity-30 transform -rotate-2 select-none pointer-events-auto">
       
       {/* Row 1 - Left to Right (Fast) */}
       <div className="flex w-max relative animate-[marquee-right_30s_linear_infinite]">

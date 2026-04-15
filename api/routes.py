@@ -272,7 +272,8 @@ async def prepare_transaction(request: ConfirmRequest):
 async def submit_transaction(request: ConfirmRequest):
     """
     Accept a Pera-signed transaction and submit it to Algorand.
-    Also logs the purchase to history.
+    After the Pera tx is confirmed, deploys the escrow smart contract in a
+    background task and returns its contract_url so the frontend can link to it.
     """
     try:
         from blockchain.algorand import submit_signed_transaction
@@ -286,13 +287,39 @@ async def submit_transaction(request: ConfirmRequest):
             raise ValueError("Missing signed_txn_b64 or signed_txn_bytes in request body")
 
         result = await asyncio.to_thread(submit_signed_transaction, payload)
+        tx_id = result["tx_id"]
+
+        # Deploy escrow smart contract in background (non-blocking)
+        # Returns contract_url immediately if mnemonic is available.
+        contract_url: str | None = None
+        app_id: int | None = None
+        import os
+        if os.getenv("ALGORAND_MNEMONIC"):
+            try:
+                from blockchain.algorand import deploy_and_fund_escrow
+                escrow_result = await asyncio.to_thread(
+                    deploy_and_fund_escrow, request.model_dump(), request.user_id or "demo"
+                )
+                contract_url = escrow_result.get("contract_url")
+                app_id = escrow_result.get("app_id")
+                logger.info(f"Escrow deployed: app_id={app_id}  contract={contract_url}")
+            except Exception as escrow_err:
+                logger.warning(f"Escrow deploy skipped (non-fatal): {escrow_err}")
+
         await asyncio.to_thread(
             log_purchase,
             request.user_id or "demo",
             request.model_dump(),
-            result["tx_id"],
+            tx_id,
+            app_id,
+            "locked" if app_id else None,
         )
-        return {"success": True, **result}
+        response: dict = {"success": True, **result}
+        if contract_url:
+            response["contract_url"] = contract_url
+        if app_id:
+            response["app_id"] = app_id
+        return response
     except Exception as e:
         logger.error(f"submit_transaction error: {e}")
         # Log locally as fallback so it actually shows up in history after a Pera failure
@@ -306,7 +333,7 @@ async def submit_transaction(request: ConfirmRequest):
             )
         except Exception as log_e:
             logger.error(f"Fallback local log failed: {log_e}")
-            
+
         return {"success": False, "error": str(e), "tx_id": local_tx_id}
 
 

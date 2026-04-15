@@ -152,10 +152,13 @@ def compile_contract(contract_name="approval.teal") -> bytes:
 
 def deploy_and_fund_escrow(product: dict, user_id: str = "demo") -> dict:
     """
-    Deploy a PyTeal escrow smart contract and fund it with the product price.
+    Deploy a PyTeal escrow smart contract and fund it with a small demo amount.
 
     Server signs the deploy + fund transactions using ALGORAND_MNEMONIC.
     Returns app_id so the frontend can show a link to the smart contract.
+
+    NOTE: Funding is capped at 500_000 µALGO (0.5 ALGO) to preserve testnet
+    balance.  In production this would derive from the actual product price.
     """
     from algosdk.transaction import ApplicationCreateTxn, StateSchema, PaymentTxn
     from algosdk import transaction
@@ -175,13 +178,15 @@ def deploy_and_fund_escrow(product: dict, user_id: str = "demo") -> dict:
     local_schema  = StateSchema(num_uints=0,  num_byte_slices=0)
 
     price_inr    = product.get("price", 0)
-    amount_micro = max(int(price_inr * 1000), 100_000)  # min app balance
+    # Cap at 500_000 µALGO (0.5 ALGO) to prevent testnet drain.
+    amount_micro = 500_000
 
     status_info  = client.status()
     expiry_round = status_info.get("last-round", 0) + 135_000  # ~7 days
 
+    # Encode INR price and expiry round for on-chain audit trail
     app_args = [
-        amount_micro.to_bytes(8, "big"),
+        int(price_inr).to_bytes(8, "big"),
         expiry_round.to_bytes(8, "big"),
     ]
 
@@ -218,6 +223,7 @@ def deploy_and_fund_escrow(product: dict, user_id: str = "demo") -> dict:
     signed_fund = fund_txn.sign(private_key)
     fund_tx_id  = client.send_transaction(signed_fund)
     logger.info(f"Funded escrow... tx: {fund_tx_id}")
+    transaction.wait_for_confirmation(client, fund_tx_id, 4)
 
     return {
         "tx_id":        deploy_tx_id,
