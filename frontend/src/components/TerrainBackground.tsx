@@ -67,7 +67,11 @@ function Terrain() {
 export function TerrainBackground() {
   return (
     <div className="pointer-events-none fixed inset-0 z-[0] bg-[#050505] overflow-hidden">
-      <Canvas camera={{ position: [0, 2, 5], fov: 60 }} dpr={1}>
+      <Canvas 
+         camera={{ position: [0, 2, 5], fov: 60 }} 
+         dpr={1}
+         gl={{ powerPreference: 'high-performance', antialias: false, alpha: false }}
+      >
         <fog attach="fog" args={['#050505', 5, 40]} />
         <Terrain />
       </Canvas>

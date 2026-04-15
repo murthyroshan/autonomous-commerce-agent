@@ -1,5 +1,5 @@
 'use client';
-import { FlippingProductCard } from './FlippingProductCard';
+import { StaticProductCard } from './StaticProductCard';
 
 const DUMMY_PRODUCTS = [
   { id: 1, title: 'Sony WH-1000XM5 ANC', source: 'Amazon', price: '₹22,990', rating: '4.8', hotDeal: true, priceScore: '0.9412', trustTier: 'A+', verdict: 'Underpriced' },
@@ -23,23 +23,23 @@ export function HorizontalTicker() {
     <div className="absolute w-[150vw] -left-[25vw] h-full z-0 overflow-hidden flex flex-col justify-center gap-16 opacity-30 transform -rotate-2 select-none pointer-events-auto">
       
       {/* Row 1 - Left to Right (Fast) */}
-      <div className="flex w-max relative animate-[marquee-right_30s_linear_infinite]">
+      <div className="flex w-max relative animate-[marquee-right_30s_linear_infinite] will-change-transform">
         {ROW_1.map((p, i) => (
-           <FlippingProductCard key={`r1-${i}`} item={p} />
+           <StaticProductCard key={`r1-${i}`} item={p} />
         ))}
       </div>
 
       {/* Row 2 - Right to Left (Slow) */}
-      <div className="flex w-max relative animate-[marquee-left_45s_linear_infinite]">
+      <div className="flex w-max relative animate-[marquee-left_45s_linear_infinite] will-change-transform">
         {ROW_2.map((p, i) => (
-           <FlippingProductCard key={`r2-${i}`} item={p} />
+           <StaticProductCard key={`r2-${i}`} item={p} />
         ))}
       </div>
 
       {/* Row 3 - Left to Right (Medium) */}
-      <div className="flex w-max relative animate-[marquee-right_40s_linear_infinite]">
+      <div className="flex w-max relative animate-[marquee-right_40s_linear_infinite] will-change-transform">
         {ROW_3.map((p, i) => (
-           <FlippingProductCard key={`r3-${i}`} item={p} />
+           <StaticProductCard key={`r3-${i}`} item={p} />
         ))}
       </div>
 

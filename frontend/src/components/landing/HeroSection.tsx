@@ -43,7 +43,7 @@ export function HeroSection() {
   }, []);
 
   return (
-    <div className="relative z-10 flex flex-col items-center justify-center min-h-screen pointer-events-none px-4">
+    <div className="relative w-full z-10 flex flex-col items-center pt-32 pb-10 pointer-events-none px-4">
       
       {/* Live Counter */}
       <div className="mb-8 px-5 py-2 bg-black/60 backdrop-blur-xl border border-violet-500/30 rounded-full flex items-center gap-3 shadow-[0_0_20px_rgba(139,92,246,0.1)] animate-fade-in-up">
