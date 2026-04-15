@@ -14,15 +14,6 @@ interface ConfirmResponse {
   error?: string
 }
 
-interface PrepareResponse {
-  success: boolean
-  fallback?: boolean
-  error?: string
-  txn_b64?: string
-  note_preview?: string
-  amount_micro?: number
-  receiver?: string
-}
 
 interface ProductCardProps {
   product: ScoredProduct
@@ -81,19 +72,13 @@ export function ProductCard({
     return () => clearTimeout(t)
   }, [scorePercent, index])
 
-  type ConfirmState =
-    | 'idle'
-    | 'connecting'
-    | 'signing'
-    | 'submitting'
-    | 'done'
-    | 'error'
-    | 'local'
+  type ConfirmState = 'idle' | 'connecting' | 'signing' | 'submitting' | 'done' | 'error' | 'local'
 
   const [confirmState, setConfirmState] = useState<ConfirmState>('idle')
   const [txId, setTxId] = useState<string | null>(null)
   const [explorerUrl, setExplorerUrl] = useState<string | null>(null)
-  const { address, connected, connect, disconnect, signTransaction } = usePeraWallet()
+
+  const { address, connected, connect, signTransaction } = usePeraWallet()
 
   type WatchState = 'hidden' | 'input' | 'saved'
   const [watchState, setWatchState] = useState<WatchState>('hidden')
@@ -108,74 +93,75 @@ export function ProductCard({
     score: product.score ?? 0,
   }
 
-  async function handleDirectConfirm(): Promise<void> {
+  async function handleConfirm() {
+    let connectAddress = address
+    if (!connected) {
+      setConfirmState('connecting')
+      connectAddress = await connect()
+      if (!connectAddress) {
+        setConfirmState('idle')
+        return
+      }
+    }
+
+    setConfirmState('submitting')
     try {
-      const res = await fetch(`${API}/api/confirm`, {
+      // 1. Prepare transaction
+      const prepRes = await fetch(`${API}/api/confirm/prepare`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({ ...requestBody, user_id: 'demo', sender_address: connectAddress }),
       })
-      const data: ConfirmResponse = await res.json()
-      if (data.success && data.tx_id && data.explorer_url) {
+      const prepData = await prepRes.json()
+
+      // Fallback if backend doesn't support signing yet or failed
+      if (!prepData.success || prepData.fallback) {
+        const fallbackRes = await fetch(`${API}/api/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...requestBody, user_id: 'demo', sender_address: connectAddress }),
+        })
+        const fallbackData: ConfirmResponse = await fallbackRes.json()
+        if (fallbackData.success && fallbackData.tx_id && !fallbackData.tx_id.startsWith('local-')) {
+          setTxId(fallbackData.tx_id)
+          setExplorerUrl(fallbackData.explorer_url ?? `https://lora.algokit.io/testnet/transaction/${fallbackData.tx_id}`)
+          setConfirmState('done')
+        } else if (fallbackData.success) {
+          setConfirmState('local')
+        } else {
+          setConfirmState('error')
+        }
+        return
+      }
+
+      // 2. Sign transaction via Pera Wallet
+      setConfirmState('signing')
+      const signedB64 = await signTransaction(prepData.txn_b64, connectAddress)
+      if (!signedB64) {
+        setConfirmState('idle') // user cancelled or failed to sign
+        return
+      }
+
+      // 3. Submit signed transaction
+      setConfirmState('submitting')
+      const submitRes = await fetch(
+        `${API}/api/confirm/submit?signed_txn_b64=${encodeURIComponent(signedB64)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...requestBody, user_id: 'demo', sender_address: connectAddress }),
+        }
+      )
+      const data = await submitRes.json()
+      if (data.success && data.tx_id) {
         setTxId(data.tx_id)
-        setExplorerUrl(data.explorer_url)
-        setConfirmState('local')
-      } else if (data.success) {
-        setTxId(data.tx_id ?? null)
-        setConfirmState('local')
+        setExplorerUrl(data.explorer_url ?? `https://lora.algokit.io/testnet/transaction/${data.tx_id}`)
+        setConfirmState('done')
       } else {
         setConfirmState('error')
       }
     } catch {
       setConfirmState('error')
-    }
-  }
-
-  async function handleConfirm() {
-    setConfirmState('connecting')
-    try {
-      let activeAddress = address
-      if (!connected || !activeAddress) {
-        activeAddress = await connect()
-        if (!activeAddress) return handleDirectConfirm()
-      }
-
-      const prepRes: PrepareResponse = await fetch(`${API}/api/confirm/prepare`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...requestBody, sender_address: activeAddress }),
-      }).then((r) => r.json())
-
-      if (!prepRes.success || prepRes.fallback || !prepRes.txn_b64) {
-        return handleDirectConfirm()
-      }
-
-      setConfirmState('signing')
-      const signedTxn = await signTransaction(prepRes.txn_b64)
-      if (!signedTxn) return handleDirectConfirm()
-
-      setConfirmState('submitting')
-      const submitRes: ConfirmResponse = await fetch(
-        `${API}/api/confirm/submit?signed_txn_b64=${encodeURIComponent(signedTxn)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-        }
-      ).then((r) => r.json())
-
-      if (submitRes.success && submitRes.tx_id) {
-        setTxId(submitRes.tx_id)
-        setExplorerUrl(
-          submitRes.explorer_url ?? `https://testnet.algoexplorer.io/tx/${submitRes.tx_id}`
-        )
-        setConfirmState('done')
-        return
-      }
-
-      return handleDirectConfirm()
-    } catch {
-      return handleDirectConfirm()
     }
   }
 
@@ -379,40 +365,14 @@ export function ProductCard({
       )}
 
       <div style={{ transform: 'translateZ(30px)' }} className="mt-4 relative z-20 w-full flex-grow flex flex-col justify-end">
-        {/* ── Wallet identity badge ── */}
+        {/* Algorand badge */}
         {confirmState === 'idle' && (
-          <div className="mb-2 flex items-center justify-between gap-2">
-            {connected && address ? (
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="inline-flex h-1.5 w-1.5 rounded-full"
-                  style={{ background: '#34d399' }}
-                />
-                <span className="text-xs" style={{ color: '#6ee7b7' }}>
-                  Pera: {address.slice(0, 4)}…{address.slice(-4)}
-                </span>
-                <button
-                  onClick={disconnect}
-                  className="ml-1 text-[10px] transition-colors"
-                  style={{ color: '#52525b' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
-                  title="Disconnect wallet"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="inline-flex h-1.5 w-1.5 rounded-full"
-                  style={{ background: '#f59e0b' }}
-                />
-                <span className="text-xs" style={{ color: '#78716c' }}>
-                  Wallet not connected
-                </span>
-              </div>
-            )}
+          <div className="mb-2 flex items-center gap-1.5">
+            <span
+              className="inline-flex h-1.5 w-1.5 rounded-full"
+              style={{ background: '#34d399' }}
+            />
+            <span className="text-xs" style={{ color: '#6ee7b7' }}>Algorand Testnet</span>
           </div>
         )}
 
@@ -434,9 +394,7 @@ export function ProductCard({
               e.currentTarget.style.opacity = '1'
             }}
           >
-            {connected && address
-              ? isWinner ? '⚡ Sign with Pera' : 'Sign with Pera'
-              : isWinner ? '⚡ Connect & Sign' : 'Connect & Sign'}
+            {isWinner ? '⚡ Confirm on Algorand' : 'Confirm on Algorand'}
           </button>
         )}
 
@@ -454,7 +412,7 @@ export function ProductCard({
 
         {confirmState === 'submitting' && (
           <div className="w-full rounded-xl px-4 py-2.5 text-center text-sm" style={{ background: 'rgba(39,39,42,0.6)', color: '#71717a', border: '1px solid #333' }}>
-            <span className="inline-block animate-pulse">Submitting...</span>
+            <span className="inline-block animate-pulse">Logging on Algorand...</span>
           </div>
         )}
 
