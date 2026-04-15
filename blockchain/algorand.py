@@ -9,6 +9,7 @@ import json
 import os
 import logging
 import base64
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -104,18 +105,28 @@ def build_unsigned_transaction(product: dict) -> dict:
     }
 
 
-def submit_signed_transaction(signed_txn_b64: str) -> dict:
+def submit_signed_transaction(signed_txn_payload: str | bytes) -> dict:
     """
-    Accept a base64-encoded signed transaction from the frontend
-    (signed by Pera Wallet) and submit it to the Algorand network.
-
-    Returns: {"tx_id": str, "explorer_url": str}
+    Accept a signed transaction payload from the frontend and submit it to Algorand.
+    Handles legacy Base64 strings or robust structural Byte arrays.
     """
     from algosdk import transaction, encoding
 
     client = _get_client()
-    signed_bytes = base64.b64decode(signed_txn_b64)
-    signed_txn = encoding.future_msgpack_decode(signed_bytes)
+    
+    if isinstance(signed_txn_payload, bytes):
+        # algosdk.encoding.msgpack_decode strictly expects a base64 string.
+        # If passed raw bytes, it erroneously attempts to base64_decode them, causing "Incorrect padding".
+        # We encode our safe raw bytes to base64 just for the SDK's internal decoder.
+        b64_string = base64.b64encode(signed_txn_payload).decode("utf-8")
+        signed_txn = encoding.msgpack_decode(b64_string)
+    else:
+        # Legacy fallback for Base64 (sanitized and strictly padded)
+        b64_clean = signed_txn_payload.replace("-", "+").replace("_", "/")
+        b64_clean = re.sub(r'[^A-Za-z0-9+/]', '', b64_clean)
+        b64_clean += "=" * ((4 - len(b64_clean) % 4) % 4)
+        signed_bytes = base64.b64decode(b64_clean)
+        signed_txn = encoding.msgpack_decode(base64.b64encode(signed_bytes).decode("utf-8"))
     tx_id = client.send_transaction(signed_txn)
 
     logger.info(f"Pera-signed tx submitted: {tx_id}")

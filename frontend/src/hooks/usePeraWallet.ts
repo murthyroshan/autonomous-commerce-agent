@@ -72,9 +72,13 @@ export function usePeraWallet() {
    * The txnB64 must be the raw msgpack bytes encoded as standard base64
    * (produced by algosdk.encodeUnsignedTransaction on the backend).
    *
-   * Returns the signed transaction as base64, or null on failure.
+   * Returns the signed transaction as a number array, or null on failure.
    */
-  const signTransaction = async (txnB64: string, signerAddress: string): Promise<string | null> => {
+  const signTransaction = async (txnB64: string, signerAddress: string): Promise<number[] | null> => {
+    if (!peraWallet.isConnected) {
+      console.error('Cannot sign: Pera wallet not connected')
+      return null
+    }
     // We do not rely on the React state closures (`connected`, `address`) here because
     // if the user connects during the same render cycle (e.g. inside handleConfirm),
     // these values will be stale. We require the caller to pass the known good address.
@@ -92,11 +96,15 @@ export function usePeraWallet() {
       // Pera expects [[{ txn, signers }]] — explicitly provide the connected address 
       // as the signer to ensure correct routing to the mobile app.
       const signedTxns = await peraWallet.signTransaction([[{ txn, signers: [signerAddress] }]])
-      return btoa(String.fromCharCode(...signedTxns[0]))
-    } catch (e) {
-      // Don't use console.error in Next 14+; it triggers the dev overlay even for handled errors
-      console.warn('Pera signing failed or user cancelled:', e)
-      return null
+      // Convert Uint8Array directly to a numbered array to bypass all Base64 translation errors
+      return Array.from(signedTxns[0])
+    } catch (e: any) {
+      console.warn('Pera signing failed:', e)
+      const msg = e?.message?.toLowerCase() || ''
+      if (msg.includes('user rejected') || msg.includes('cancelled') || msg.includes('declined')) {
+        return null // Silently cancel
+      }
+      throw e // Raise the error up!
     }
   }
 

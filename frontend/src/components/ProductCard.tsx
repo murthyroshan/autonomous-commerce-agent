@@ -80,6 +80,7 @@ export function ProductCard({
   type ConfirmState = 'idle' | 'connecting' | 'signing' | 'submitting' | 'done' | 'error' | 'local'
 
   const [confirmState, setConfirmState] = useState<ConfirmState>('idle')
+  const [confirmError, setConfirmError] = useState<string | null>(null)
   const [txId, setTxId] = useState<string | null>(null)
   const [explorerUrl, setExplorerUrl] = useState<string | null>(null)
   const [contractUrl, setContractUrl] = useState<string | null>(null)
@@ -152,23 +153,29 @@ export function ProductCard({
       // 3. Submit signed transaction
       setConfirmState('submitting')
       const submitRes = await fetch(
-        `${API}/api/confirm/submit?signed_txn_b64=${encodeURIComponent(signedB64)}`,
+        `${API}/api/confirm/submit`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...requestBody, user_id: 'demo', sender_address: connectAddress }),
+          body: JSON.stringify({ ...requestBody, user_id: 'demo', sender_address: connectAddress, signed_txn_bytes: signedB64 }),
         }
       )
       const data: ConfirmResponse = await submitRes.json()
-      if (data.success && data.tx_id) {
+      if (data.success && data.tx_id && !data.tx_id.startsWith('local-')) {
         setTxId(data.tx_id)
         setExplorerUrl(data.explorer_url ?? `https://lora.algokit.io/testnet/transaction/${data.tx_id}`)
         if (data.contract_url) setContractUrl(data.contract_url)
         setConfirmState('done')
+      } else if (data.tx_id) {
+        setTxId(data.tx_id)
+        if (data.error) setConfirmError(data.error)
+        setConfirmState('local')
       } else {
+        if (data.error) setConfirmError(data.error)
         setConfirmState('error')
       }
-    } catch {
+    } catch (e: any) {
+      setConfirmError(e.message || 'Network error')
       setConfirmState('error')
     }
   }
@@ -454,6 +461,12 @@ export function ProductCard({
               {confirmState === 'done' ? '✓ Signed on Algorand' : '✓ Purchase noted locally'}
             </div>
 
+            {confirmState === 'local' && confirmError && (
+              <p className="text-[10px] text-center" style={{ color: '#ef4444' }}>
+                Algorand Error: {confirmError}
+              </p>
+            )}
+
             {/* Transaction link */}
             {txId && explorerUrl && (
               <a
@@ -536,11 +549,18 @@ export function ProductCard({
         )}
 
         {confirmState === 'error' && (
-          <div
-            className="w-full rounded-xl px-4 py-2.5 text-center text-sm"
-            style={{ background: 'rgba(217,119,6,0.1)', color: '#fbbf24', border: '1px solid rgba(217,119,6,0.25)' }}
-          >
-            ✓ Purchase noted locally
+          <div className="flex flex-col gap-2">
+            <div
+              className="w-full rounded-xl px-4 py-2.5 text-center text-sm"
+              style={{ background: 'rgba(217,119,6,0.1)', color: '#fbbf24', border: '1px solid rgba(217,119,6,0.25)' }}
+            >
+              ✓ Purchase noted locally
+            </div>
+            {confirmError && (
+              <p className="text-[10px] text-center" style={{ color: '#ef4444' }}>
+                Algorand Error: {confirmError}
+              </p>
+            )}
           </div>
         )}
       </div>

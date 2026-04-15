@@ -62,6 +62,8 @@ class ConfirmRequest(BaseModel):
     score:        Optional[float] = None
     user_id:      str = "demo"
     sender_address: Optional[str] = None
+    signed_txn_b64: Optional[str] = None
+    signed_txn_bytes: Optional[list[int]] = None
 
 
 class ConfirmResponse(BaseModel):

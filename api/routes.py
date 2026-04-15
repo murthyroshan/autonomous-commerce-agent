@@ -269,7 +269,7 @@ async def prepare_transaction(request: ConfirmRequest):
 
 
 @router.post("/confirm/submit")
-async def submit_transaction(signed_txn_b64: str, request: ConfirmRequest):
+async def submit_transaction(request: ConfirmRequest):
     """
     Accept a Pera-signed transaction and submit it to Algorand.
     Also logs the purchase to history.
@@ -277,7 +277,15 @@ async def submit_transaction(signed_txn_b64: str, request: ConfirmRequest):
     try:
         from blockchain.algorand import submit_signed_transaction
 
-        result = await asyncio.to_thread(submit_signed_transaction, signed_txn_b64)
+        if request.signed_txn_bytes:
+            # Bypass base64 — accept raw integer array directly from JSON
+            payload = bytes(request.signed_txn_bytes)
+        elif request.signed_txn_b64:
+            payload = request.signed_txn_b64
+        else:
+            raise ValueError("Missing signed_txn_b64 or signed_txn_bytes in request body")
+
+        result = await asyncio.to_thread(submit_signed_transaction, payload)
         await asyncio.to_thread(
             log_purchase,
             request.user_id or "demo",
@@ -287,7 +295,19 @@ async def submit_transaction(signed_txn_b64: str, request: ConfirmRequest):
         return {"success": True, **result}
     except Exception as e:
         logger.error(f"submit_transaction error: {e}")
-        return {"success": False, "error": str(e)}
+        # Log locally as fallback so it actually shows up in history after a Pera failure
+        local_tx_id = "local-" + request.title[:8].replace(" ", "-").lower()
+        try:
+            await asyncio.to_thread(
+                log_purchase,
+                request.user_id or "demo",
+                request.model_dump(),
+                local_tx_id,
+            )
+        except Exception as log_e:
+            logger.error(f"Fallback local log failed: {log_e}")
+            
+        return {"success": False, "error": str(e), "tx_id": local_tx_id}
 
 
 class EscrowActionRequest(BaseModel):
