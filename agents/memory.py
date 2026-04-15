@@ -188,7 +188,7 @@ def update_purchase_status(user_id: str, app_id: int, new_status: str) -> None:
 
 
 
-def get_history(user_id: str, limit: int = 20) -> list[dict]:
+def get_history(user_id: str, limit: int = 100) -> list[dict]:
     """
     Return the last `limit` purchase entries for user_id, newest first.
     Returns [] if the history file does not exist.

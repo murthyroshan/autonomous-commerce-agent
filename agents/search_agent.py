@@ -127,13 +127,23 @@ PRICE_SANITY: dict[str, dict[str, float]] = {
 }
 
 
-def _is_price_sane(price: float, category: str, budget: float | None) -> bool:
+def _is_price_sane(price: float, category: str, budget: float | None, query: str = "") -> bool:
     """
     Return False if price is clearly fake or impossible.
     Checks both category floor/ceiling and budget constraint.
     """
     bounds = PRICE_SANITY.get(category, PRICE_SANITY["default"])
-    if price < bounds["min"]:
+    min_cap = bounds["min"]
+    
+    # Counterfeit protection for highly-spoofed premium brands
+    q = query.lower()
+    if 'apple' in q or 'airpods' in q or 'macbook' in q or 'iphone' in q:
+        min_cap = max(min_cap, 3000)
+        # Pro/Max Apple gear is never under 10k even used
+        if 'max' in q or 'pro' in q:
+            min_cap = max(min_cap, 10000)
+
+    if price < min_cap:
         return False
     if price > bounds["max"]:
         return False
@@ -342,10 +352,39 @@ def _parse_int(raw) -> int:
         return 0
 
 
+def _safe_search_term(title: str, max_words: int = 5) -> str:
+    """
+    Extract a concise, URL-safe search term from a verbose product title.
+    Limits to the first max_words words and strips special characters that
+    break retail search URLs (parentheses, slashes, commas, etc.).
+
+    e.g. 'OnePlus Buds 3 TWS Earbuds with 49dB ANC, Hi-Res Audio, ...' → 'OnePlus Buds 3'
+    """
+    import re as _re
+    # Stop at verbose description markers
+    stop_markers = [
+        'truly wireless', 'bluetooth', ' with ', 'featuring', 'includes',
+        'upto', 'up to', ' (', ' [', ',', '|', ' - ', 'wireless earphone',
+        'in-ear', 'over-ear', 'noise cancell', 'smart adaptive',
+        'buy', 'price in india', 'specification',
+    ]
+    name = title.strip()
+    for marker in stop_markers:
+        idx = name.lower().find(marker.lower())
+        if idx > 3:
+            name = name[:idx].strip().rstrip(',-|')
+            break
+    # Keep only alphanumeric, spaces, +, and basic punctuation safe for URLs
+    name = _re.sub(r'[^\w\s+]', ' ', name)
+    words = name.split()
+    return ' '.join(words[:max_words]).strip()
+
+
 # ── Tier 1: Serper.dev ────────────────────────────────────────────────────────
 
 def _parse_serper_response(
     data: dict,
+    query: str,
     max_price: float | None = None,
     category: str = "default",
 ) -> list[dict]:
@@ -357,7 +396,7 @@ def _parse_serper_response(
             continue
 
         # Hard sanity check — drop impossible prices
-        if not _is_price_sane(price, category, max_price):
+        if not _is_price_sane(price, category, max_price, query=query):
             logger.info(
                 f"Dropping '{item.get('title', '?')}' — "
                 f"price ₹{price:,.0f} fails sanity check for {category}"
@@ -373,29 +412,32 @@ def _parse_serper_response(
         raw_link = item.get("link", "#")
         if "ibp=oshop" in raw_link or "google.com" in raw_link:
             import urllib.parse
-            safe_title = urllib.parse.quote_plus(title)
+            # Use a concise search term (not the full verbose title)
+            search_term = _safe_search_term(title, max_words=5)
+            safe_title  = urllib.parse.quote_plus(title)        # full title for Amazon/Flipkart
+            # Use percent-encoding (%20) instead of + for stores that break on +
+            safe_short  = urllib.parse.quote(search_term)       
             source_lower = item.get("source", "").lower()
-            
+
             if "amazon" in source_lower:
                 raw_link = f"https://www.amazon.in/s?k={safe_title}"
             elif "flipkart" in source_lower:
                 raw_link = f"https://www.flipkart.com/search?q={safe_title}"
             elif "reliance" in source_lower:
-                raw_link = f"https://www.reliancedigital.in/search?q={safe_title}:relevance"
+                raw_link = f"https://www.reliancedigital.in/search?q={safe_short}:relevance"
             elif "croma" in source_lower:
-                raw_link = f"https://www.croma.com/searchB?q={safe_title}"
+                raw_link = f"https://www.croma.com/searchB?q={safe_short}"
             elif "vijay sales" in source_lower:
-                raw_link = f"https://www.vijaysales.com/search/{safe_title}"
+                raw_link = f"https://www.vijaysales.com/search/{safe_short}"
             elif "jiomart" in source_lower:
-                raw_link = f"https://www.jiomart.com/search/{safe_title}"
+                # JioMart search works only with short, clean query strings
+                raw_link = f"https://www.jiomart.com/search/{safe_short}"
             elif "tata cliq" in source_lower:
-                raw_link = f"https://www.tatacliq.com/search/?searchCategory=all&text={safe_title}"
+                raw_link = f"https://www.tatacliq.com/search/?searchCategory=all&text={safe_short}"
             else:
-                # Absolute Fallback: Use DuckDuckGo's "I'm Feeling Lucky" (!ducky) auto-redirect.
-                # This guarantees the user is instantly redirected to the store's direct website
-                # instead of hitting a Google search results page.
+                # Fallback: DuckDuckGo I'm Feeling Lucky — use short term for cleaner redirect
                 safe_source = urllib.parse.quote_plus(item.get("source", ""))
-                raw_link = f"https://duckduckgo.com/?q=%21ducky+{safe_title}+{safe_source}"
+                raw_link = f"https://duckduckgo.com/?q=%21ducky+{safe_short}+{safe_source}"
 
         products.append({
             "title":            title,
@@ -428,7 +470,7 @@ def _call_serper(
     )
     r.raise_for_status()
     raw = r.json()
-    return _parse_serper_response(raw, max_price=max_price, category=category)
+    return _parse_serper_response(raw, query=query, max_price=max_price, category=category)
 
 
 # ── Tier 2: Groq Compound (web search fallback) ───────────────────────────────
@@ -468,7 +510,7 @@ def _call_groq_search(
         price = float(p.get("price_inr") or p.get("price") or 0)
         if price <= 0:
             continue
-        if not _is_price_sane(price, category, max_price):
+        if not _is_price_sane(price, category, max_price, query=query):
             continue
         title = str(p.get("title", "Unknown"))
         if not _is_relevant(title, category):
