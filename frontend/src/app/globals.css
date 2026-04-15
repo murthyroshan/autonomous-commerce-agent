@@ -69,15 +69,9 @@
   }
 }
 
-.hide-cursor, .hide-cursor * {
-  cursor: none !important;
-}
+/* Removed .hide-cursor block to fix Next.js dev overlay cursor */
 
-@media (pointer: fine) {
-  * {
-    cursor: none !important;
-  }
-}
+/* Removed global cursor hide to allow dev overlays to work */
 
 /* ── Keyframes ─────────────────────────────────────────────────────────────── */
 @keyframes fadeInUp {
