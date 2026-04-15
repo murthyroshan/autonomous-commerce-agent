@@ -64,6 +64,8 @@ class ConfirmRequest(BaseModel):
     sender_address: Optional[str] = None
     signed_txn_b64: Optional[str] = None
     signed_txn_bytes: Optional[list[int]] = None
+    app_id: Optional[int] = None
+    contract_url: Optional[str] = None
 
 
 class ConfirmResponse(BaseModel):

@@ -1,18 +1,8 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 export function FlippingProductCard({ item }: { item: any }) {
   const [flipped, setFlipped] = useState(false);
-
-  useEffect(() => {
-    const randomDelay = Math.random() * 10000 + 5000;
-    const interval = setInterval(() => {
-      setFlipped(true);
-      setTimeout(() => setFlipped(false), 3000);
-    }, randomDelay);
-
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <div 

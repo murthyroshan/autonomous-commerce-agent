@@ -458,7 +458,9 @@ export function ProductCard({
                 border: confirmState === 'done' ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(217,119,6,0.25)',
               }}
             >
-              {confirmState === 'done' ? '✓ Signed on Algorand' : '✓ Purchase noted locally'}
+              {confirmState === 'done'
+                ? contractUrl ? '✓ Signed & Escrow Deployed' : '✓ Signed on Algorand'
+                : '✓ Purchase noted locally'}
             </div>
 
             {confirmState === 'local' && confirmError && (
@@ -483,24 +485,33 @@ export function ProductCard({
               </a>
             )}
 
-            {/* Smart contract / escrow link */}
+            {/* Smart contract / escrow link — prominent CTA */}
             {contractUrl && (
               <a
                 href={contractUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all"
+                className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all"
                 style={{
-                  background: 'rgba(109,40,217,0.10)',
+                  background: 'linear-gradient(135deg, rgba(109,40,217,0.25), rgba(139,92,246,0.15))',
                   color: '#c4b5fd',
-                  border: '1px solid rgba(109,40,217,0.3)',
+                  border: '1px solid rgba(139,92,246,0.5)',
+                  boxShadow: '0 0 12px rgba(139,92,246,0.15)',
+                  letterSpacing: '0.01em',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(109,40,217,0.18)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(109,40,217,0.10)')}
-                title="View escrow smart contract on Algorand"
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(109,40,217,0.4), rgba(139,92,246,0.25))'
+                  e.currentTarget.style.boxShadow = '0 0 20px rgba(139,92,246,0.3)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(109,40,217,0.25), rgba(139,92,246,0.15))'
+                  e.currentTarget.style.boxShadow = '0 0 12px rgba(139,92,246,0.15)'
+                }}
+                title="View escrow smart contract on Algorand explorer"
               >
-                <span>◈</span>
-                <span>View Smart Contract</span>
+                <span style={{ fontSize: '1rem' }}>◈</span>
+                <span>View Smart Contract on Algorand</span>
+                <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>↗</span>
               </a>
             )}
 

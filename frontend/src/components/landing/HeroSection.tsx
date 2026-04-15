@@ -1,7 +1,18 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ExampleQueriesMarquee } from './ExampleQueriesMarquee';
+import { FlippingProductCard } from './FlippingProductCard';
+
+const MARQUEE_PRODUCTS = [
+  { id: 1, title: 'Sony WH-1000XM5 ANC', source: 'Amazon', price: '₹22,990', rating: '4.8', hotDeal: true, priceScore: '0.9412', trustTier: 'A+', verdict: 'Underpriced' },
+  { id: 2, title: 'ASUS ROG Zephyrus G14', source: 'Flipkart', price: '₹1,44,990', rating: '4.6', hotDeal: false, priceScore: '0.8200', trustTier: 'S', verdict: 'Fair Value' },
+  { id: 3, title: 'LG C3 OLED 55"', source: 'Amazon', price: '₹1,09,990', rating: '4.9', hotDeal: false, priceScore: '0.8850', trustTier: 'A', verdict: 'Excellent' },
+  { id: 4, title: 'Apple MacBook Air M3', source: 'Croma', price: '₹1,05,500', rating: '4.9', hotDeal: true, priceScore: '0.9100', trustTier: 'S', verdict: 'Steal Deal' },
+  { id: 5, title: 'Samsung Galaxy S24 Ultra', source: 'Amazon', price: '₹1,24,999', rating: '4.7', hotDeal: false, priceScore: '0.7510', trustTier: 'A+', verdict: 'Market Rate' },
+  { id: 6, title: 'Nothing Phone (2)', source: 'Flipkart', price: '₹34,990', rating: '4.5', hotDeal: true, priceScore: '0.9630', trustTier: 'B+', verdict: 'High Value' },
+  { id: 7, title: 'iPad Air M2 11"', source: 'Apple Store', price: '₹74,900', rating: '4.8', hotDeal: false, priceScore: '0.8300', trustTier: 'S', verdict: 'Premium Pick' },
+  { id: 8, title: 'OnePlus 12 256GB', source: 'Amazon', price: '₹64,999', rating: '4.6', hotDeal: true, priceScore: '0.9200', trustTier: 'A', verdict: 'Best Mid-Range' },
+];
 
 const HEADLINES = [
   "Find the best laptop",
@@ -107,8 +118,18 @@ export function HeroSection() {
         )}
       </div>
 
-      <div className="w-full max-w-5xl translate-y-12 animate-fade-in-up pointer-events-auto">
-         <ExampleQueriesMarquee />
+      <div className="w-full max-w-5xl mt-12 mb-24 animate-fade-in-up pointer-events-auto">
+        {/* Product card ticker — single row scrolling left */}
+        <div className="w-full overflow-hidden relative">
+          {/* Fade edges */}
+          <div className="absolute left-0 top-0 h-full w-24 bg-gradient-to-r from-[#050508] to-transparent z-10 pointer-events-none" />
+          <div className="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-[#050508] to-transparent z-10 pointer-events-none" />
+          <div className="flex w-max animate-[marquee-left_50s_linear_infinite] hover:[animation-play-state:paused]">
+            {[...MARQUEE_PRODUCTS, ...MARQUEE_PRODUCTS, ...MARQUEE_PRODUCTS].map((p, i) => (
+              <FlippingProductCard key={`ticker-${i}`} item={p} />
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
