@@ -206,6 +206,74 @@ def _is_relevant(title: str, category: str) -> bool:
     return True
 
 
+def _affix_exclusion_check(query: str, products: list[dict]) -> list[dict]:
+    """
+    Ultra-fast deterministic model suffix exclusion.
+    If the search query is for a BASE model (e.g. '13'), strictly reject
+    search engine results that leaked trailing suffixes (e.g. '13R', '13 Pro').
+    """
+    valid_products = []
+    query_lower = query.lower()
+    
+    # Provide immunity to price integers so they aren't mistaken as model tokens (e.g. '4000')
+    query_no_price = re.sub(r'(under|below|less than|max|budget|rs\.?|₹)\s*[\d,]+\s*k?\b', '', query_lower)
+    query_no_price = re.sub(r'\b[\d,]+\s*k?\s*(?:mein|me\b|rupay|rupee)', '', query_no_price)
+
+    # Extract structural model tokens (e.g. '13', 'm3', 's24') from the normalized query
+    model_tokens = re.findall(r'\b[a-z]*[0-9]+[a-z]*\b', query_no_price)
+    
+    for p in products:
+        title_lower = p.get('title', '').lower()
+        is_valid = True
+        
+        for token in model_tokens:
+            # Skip pure specifications (e.g., '144hz', '5g')
+            if re.match(r'^\d+(g|gb|tb|mah|hz|w|inch|cm|k)$', token):
+                continue
+            
+            # Skip generalized specs that blend letters and numbers (e.g., 'wifi6', 'ddr5', 'gen4')
+            if re.match(r'^(wifi|gen|ddr|usb|bt|hdmi)[0-9]+$', token):
+                continue
+                
+            # POSITIVE MATCH: Must physically contain the core model token
+            if not re.search(rf'(?<![A-Za-z0-9]){re.escape(token)}(?![A-Za-z0-9])', title_lower):
+                logger.info(f"Filtered out missing core token '{token}' in '{title_lower}'")
+                is_valid = False
+                break
+                
+            # Reject if token is structurally embedded in something else (e.g., '13R')
+            attached_suffix_pattern = rf'\b{re.escape(token)}[A-Za-z]+\b'
+            for match in re.findall(attached_suffix_pattern, title_lower):
+                if match not in query_lower:
+                    logger.info(f"Filtered out suffix variant: '{match}' in '{title_lower}'")
+                    is_valid = False
+                    break
+            
+            # Reject if token has separated generic suffix (e.g. '13 Pro')
+            variant_words = ['pro', 'max', 'ultra', 'plus', 'fe', 'lite', 'se', 'r', 'mini', 'air', 'studio']
+            for var in variant_words:
+                sep_pattern = rf'\b{re.escape(token)}\s+{var}\b'
+                if re.search(sep_pattern, title_lower):
+                    if not re.search(sep_pattern, query_lower) and var not in query_lower:
+                        logger.info(f"Filtered out variant word: '{var}' in '{title_lower}'")
+                        is_valid = False
+                        break
+            if not is_valid:
+                break
+                
+        # Guard against Desktop matching Laptop (Mac vs iMac/Mac mini)
+        if 'mac' in query_lower and 'macbook' not in query_lower:
+            if 'imac' in title_lower and 'imac' not in query_lower:
+                is_valid = False
+            elif 'mac mini' in title_lower and 'mini' not in query_lower:
+                is_valid = False
+
+        if is_valid:
+            valid_products.append(p)
+            
+    return valid_products
+
+
 # ── Deduplication ─────────────────────────────────────────────────────────────
 
 def _deduplicate(products: list[dict]) -> list[dict]:
@@ -301,12 +369,33 @@ def _parse_serper_response(
         if not _is_relevant(title, category):
             continue
 
-        # Fix broken 'ibp=oshop' links by generating a standard Google Shopping link
+        # Fix broken 'ibp=oshop' links by routing directly to the storefront
         raw_link = item.get("link", "#")
-        if "ibp=oshop" in raw_link:
+        if "ibp=oshop" in raw_link or "google.com" in raw_link:
             import urllib.parse
             safe_title = urllib.parse.quote_plus(title)
-            raw_link = f"https://www.google.com/search?tbm=shop&q={safe_title}"
+            source_lower = item.get("source", "").lower()
+            
+            if "amazon" in source_lower:
+                raw_link = f"https://www.amazon.in/s?k={safe_title}"
+            elif "flipkart" in source_lower:
+                raw_link = f"https://www.flipkart.com/search?q={safe_title}"
+            elif "reliance" in source_lower:
+                raw_link = f"https://www.reliancedigital.in/search?q={safe_title}:relevance"
+            elif "croma" in source_lower:
+                raw_link = f"https://www.croma.com/searchB?q={safe_title}"
+            elif "vijay sales" in source_lower:
+                raw_link = f"https://www.vijaysales.com/search/{safe_title}"
+            elif "jiomart" in source_lower:
+                raw_link = f"https://www.jiomart.com/search/{safe_title}"
+            elif "tata cliq" in source_lower:
+                raw_link = f"https://www.tatacliq.com/search/?searchCategory=all&text={safe_title}"
+            else:
+                # Absolute Fallback: Use DuckDuckGo's "I'm Feeling Lucky" (!ducky) auto-redirect.
+                # This guarantees the user is instantly redirected to the store's direct website
+                # instead of hitting a Google search results page.
+                safe_source = urllib.parse.quote_plus(item.get("source", ""))
+                raw_link = f"https://duckduckgo.com/?q=%21ducky+{safe_title}+{safe_source}"
 
         products.append({
             "title":            title,
@@ -454,6 +543,8 @@ def search_agent(state: AgentState) -> dict:
                                 existing_titles.add(p["title"])
 
                 if results:
+                    results = _affix_exclusion_check(query, results)
+                if results:
                     return results, False
                 logger.warning("Serper returned 0 products")
             except (RetryError, Exception) as e:
@@ -464,6 +555,8 @@ def search_agent(state: AgentState) -> dict:
         if os.getenv("GROQ_API_KEY"):
             try:
                 results = _call_groq_search(query, max_price=max_price, category=category)
+                if results:
+                    results = _affix_exclusion_check(query, results)
                 if results:
                     logger.info(f"Groq fallback returned {len(results)} products")
                     return results, False

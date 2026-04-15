@@ -14,10 +14,11 @@ The public interface is always:
 
 import logging
 import re
+import json
 import concurrent.futures
 
 from .state import AgentState, initial_state
-from .search_agent import search_agent
+from .search_agent import search_agent, _get_groq_client
 from .compare_agent import compare_agent
 from .decision_agent import decision_agent
 
@@ -36,6 +37,45 @@ def _detect_vs_query(query: str) -> tuple[bool, str, str]:
     if len(parts) == 2 and parts[0].strip() and parts[1].strip():
         return True, parts[0].strip(), parts[1].strip()
     return False, query, ""
+
+def _parse_user_intent(query: str) -> dict:
+    """
+    Parses the raw query to extract standardized search entities.
+    Returns: {"mode": "vs"|"standard", "items": ["Item 1", "Item 2"]}
+    """
+    prompt = (
+        "You are an e-commerce search intent parser. "
+        "Convert the user's raw query into precise, standardized product search terms including the correct brand.\n"
+        "- If it's a comparison query (e.g., 'Oneplus 13 vs 13R' or 'A versus B'), set 'mode' to 'vs' and specify both items fully (e.g. infer brand for the second item if missing).\n"
+        "- If it's a generic base model like 'S24', output the full name 'Samsung Galaxy S24'. Do NOT append suffixes like 'Ultra' or 'FE' unless requested in the query.\n"
+        "- If they ask for 'Mac M3', assume laptop and output 'Apple MacBook Air M3' or similar. Do NOT output 'iMac M3'.\n"
+        "Return ONLY a valid JSON object matching this exact structure: {\"mode\": \"vs\" | \"standard\", \"items\": [\"Item 1 to search\", \"Item 2 to search\"]}\n"
+    )
+    try:
+        response = _get_groq_client().chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": query}
+            ],
+            temperature=0.0
+        )
+        text = response.choices[0].message.content
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match:
+            parsed = json.loads(match.group())
+            if "mode" in parsed and "items" in parsed and len(parsed["items"]) > 0:
+                if parsed["mode"] == "vs" and len(parsed["items"]) == 1:
+                    parsed["mode"] = "standard"
+                return parsed
+    except Exception as e:
+        logger.warning(f"Feature Intent parsing failed: {e}")
+    
+    # Fallback to standard regex routine
+    is_vs, side_a, side_b = _detect_vs_query(query)
+    if is_vs:
+        return {"mode": "vs", "items": [side_a, side_b]}
+    return {"mode": "standard", "items": [query]}
 
 
 def _run_single_search(sub_query: str) -> list[dict]:
@@ -121,9 +161,13 @@ def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
     state = initial_state(query)
     logger.info(f"Pipeline started for query: '{query}' user_id='{user_id}'")
 
-    is_vs, side_a, side_b = _detect_vs_query(query)
+    intent = _parse_user_intent(query)
+    is_vs = intent["mode"] == "vs"
+    items = intent["items"]
 
-    if is_vs:
+    if is_vs and len(items) >= 2:
+        side_a = items[0]
+        side_b = items[1]
         # ── VS Mode: parallel dual-search ────────────────────────────────────
         logger.info(f"VS mode detected: '{side_a}' vs '{side_b}'")
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
@@ -186,6 +230,10 @@ def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
             return state
 
     # ── Standard Mode ─────────────────────────────────────────────────────────
+    if not is_vs:
+        state["query"] = items[0]  # Overwrite with normalized query
+        logger.info(f"Using normalized standard query: '{state['query']}'")
+
     # Agent 1: Search
     state.update(search_agent(state))
     if not state["search_results"]:
