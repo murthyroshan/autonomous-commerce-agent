@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent, useRef } from 'react'
 import type { ScoredProduct } from '@/hooks/useAgentStream'
 import { motion, useMotionValue, useSpring, useTransform, useMotionTemplate } from 'framer-motion'
 import { usePeraWallet } from '@/hooks/usePeraWallet'
+import { SocialProofPanel } from '@/components/SocialProofPanel'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -11,6 +12,8 @@ interface ConfirmResponse {
   success: boolean
   tx_id?: string
   explorer_url?: string
+  app_id?: number       // Algorand smart contract application ID (Phase 5 escrow)
+  contract_url?: string // link to the deployed escrow application
   error?: string
 }
 
@@ -20,6 +23,7 @@ interface ProductCardProps {
   isWinner?: boolean
   index?: number
   justification?: string
+  communitySentiment?: string
 }
 
 function sourceBadge(source: string) {
@@ -62,6 +66,7 @@ export function ProductCard({
   isWinner = false,
   index = 0,
   justification,
+  communitySentiment,
 }: ProductCardProps) {
   const scorePercent = Math.round((product.score ?? 0) * 100)
   const badge = sourceBadge(product.source)
@@ -77,6 +82,7 @@ export function ProductCard({
   const [confirmState, setConfirmState] = useState<ConfirmState>('idle')
   const [txId, setTxId] = useState<string | null>(null)
   const [explorerUrl, setExplorerUrl] = useState<string | null>(null)
+  const [contractUrl, setContractUrl] = useState<string | null>(null)
 
   const { address, connected, connect, signTransaction } = usePeraWallet()
 
@@ -125,6 +131,7 @@ export function ProductCard({
         if (fallbackData.success && fallbackData.tx_id && !fallbackData.tx_id.startsWith('local-')) {
           setTxId(fallbackData.tx_id)
           setExplorerUrl(fallbackData.explorer_url ?? `https://lora.algokit.io/testnet/transaction/${fallbackData.tx_id}`)
+          if (fallbackData.contract_url) setContractUrl(fallbackData.contract_url)
           setConfirmState('done')
         } else if (fallbackData.success) {
           setConfirmState('local')
@@ -136,7 +143,7 @@ export function ProductCard({
 
       // 2. Sign transaction via Pera Wallet
       setConfirmState('signing')
-      const signedB64 = await signTransaction(prepData.txn_b64, connectAddress)
+      const signedB64 = await signTransaction(prepData.txn_b64, connectAddress!)
       if (!signedB64) {
         setConfirmState('idle') // user cancelled or failed to sign
         return
@@ -152,10 +159,11 @@ export function ProductCard({
           body: JSON.stringify({ ...requestBody, user_id: 'demo', sender_address: connectAddress }),
         }
       )
-      const data = await submitRes.json()
+      const data: ConfirmResponse = await submitRes.json()
       if (data.success && data.tx_id) {
         setTxId(data.tx_id)
         setExplorerUrl(data.explorer_url ?? `https://lora.algokit.io/testnet/transaction/${data.tx_id}`)
+        if (data.contract_url) setContractUrl(data.contract_url)
         setConfirmState('done')
       } else {
         setConfirmState('error')
@@ -364,6 +372,23 @@ export function ProductCard({
         </div>
       )}
 
+      {isWinner && communitySentiment && (
+        <div
+          className="mt-3 rounded-xl p-3 text-xs leading-relaxed"
+          style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', color: '#a1a1aa' }}
+        >
+          <span className="mb-1 block text-xs font-semibold" style={{ color: '#34d399' }}>
+            AI says
+          </span>
+          {communitySentiment}
+        </div>
+      )}
+
+      {/* Social Proof Aggregator — shown on winner cards */}
+      {isWinner && (
+        <SocialProofPanel title={product.title} query={product.title} />
+      )}
+
       <div style={{ transform: 'translateZ(30px)' }} className="mt-4 relative z-20 w-full flex-grow flex flex-col justify-end">
         {/* Algorand badge */}
         {confirmState === 'idle' && (
@@ -428,6 +453,8 @@ export function ProductCard({
             >
               {confirmState === 'done' ? '✓ Signed on Algorand' : '✓ Purchase noted locally'}
             </div>
+
+            {/* Transaction link */}
             {txId && explorerUrl && (
               <a
                 href={explorerUrl}
@@ -437,9 +464,30 @@ export function ProductCard({
                 style={{ color: '#52525b' }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
                 onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
-                title="View on Algorand Explorer"
+                title="View transaction on Algorand Explorer"
               >
                 TX: {txId.slice(0, 12)}...
+              </a>
+            )}
+
+            {/* Smart contract / escrow link */}
+            {contractUrl && (
+              <a
+                href={contractUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all"
+                style={{
+                  background: 'rgba(109,40,217,0.10)',
+                  color: '#c4b5fd',
+                  border: '1px solid rgba(109,40,217,0.3)',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(109,40,217,0.18)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(109,40,217,0.10)')}
+                title="View escrow smart contract on Algorand"
+              >
+                <span>◈</span>
+                <span>View Smart Contract</span>
               </a>
             )}
 

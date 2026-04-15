@@ -197,10 +197,12 @@ async def confirm_purchase(request: ConfirmRequest):
     """
     Log a confirmed purchase to Algorand testnet and record in local history.
     Phase 4: plain PaymentTxn with note field.
-    Phase 5: smart contract escrow.
+    Phase 5: smart contract escrow (deploy + fund).
     """
     tx_id = None
+    app_id = None
     explorer_url = None
+    contract_url = None
     confirm_error = None
 
     try:
@@ -209,8 +211,10 @@ async def confirm_purchase(request: ConfirmRequest):
         result = await asyncio.to_thread(
             record_purchase_intent, request.model_dump(), request.user_id
         )
-        tx_id = result.get("tx_id")
+        tx_id        = result.get("tx_id")
+        app_id       = result.get("app_id")
         explorer_url = result.get("explorer_url")
+        contract_url = result.get("contract_url")  # escrow smart contract link
     except ImportError:
         logger.info("Blockchain module not available (Phase 4+) — logging locally only")
         tx_id = "local-" + request.title[:8].replace(" ", "-").lower()
@@ -227,7 +231,9 @@ async def confirm_purchase(request: ConfirmRequest):
     # Phase 6: log to local purchase history — never block the response
     try:
         product_dict = request.model_dump()
-        await asyncio.to_thread(log_purchase, request.user_id, product_dict, tx_id)
+        escrow_status = "locked" if app_id else None
+        from agents.memory import log_purchase
+        await asyncio.to_thread(log_purchase, request.user_id, product_dict, tx_id, app_id, escrow_status)
     except Exception as e:
         logger.warning(f"log_purchase failed (non-blocking): {e}")
 
@@ -235,6 +241,8 @@ async def confirm_purchase(request: ConfirmRequest):
         success=True,
         tx_id=tx_id,
         explorer_url=explorer_url,
+        app_id=app_id,
+        contract_url=contract_url,
         error=confirm_error,
     )
 
@@ -280,6 +288,38 @@ async def submit_transaction(signed_txn_b64: str, request: ConfirmRequest):
     except Exception as e:
         logger.error(f"submit_transaction error: {e}")
         return {"success": False, "error": str(e)}
+
+
+class EscrowActionRequest(BaseModel):
+    user_id: str = "demo"
+    app_id: int
+
+@router.post("/escrow/confirm_delivery")
+async def confirm_delivery_route(req: EscrowActionRequest):
+    """Call confirm_delivery on the Escrow Smart Contract."""
+    try:
+        from blockchain.algorand import call_confirm_delivery
+        from agents.memory import update_purchase_status
+        result = await asyncio.to_thread(call_confirm_delivery, req.app_id)
+        await asyncio.to_thread(update_purchase_status, req.user_id, req.app_id, "delivered")
+        return {"success": True, "tx_id": result.get("tx_id")}
+    except Exception as e:
+        logger.error(f"confirm_delivery error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/escrow/refund")
+async def refund_escrow_route(req: EscrowActionRequest):
+    """Call auto_refund_after_expiry on the Escrow Smart Contract."""
+    try:
+        from blockchain.algorand import call_auto_refund_after_expiry
+        from agents.memory import update_purchase_status
+        result = await asyncio.to_thread(call_auto_refund_after_expiry, req.app_id)
+        await asyncio.to_thread(update_purchase_status, req.user_id, req.app_id, "refunded")
+        return {"success": True, "tx_id": result.get("tx_id")}
+    except Exception as e:
+        logger.error(f"refund_escrow error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ── GET /api/history — purchase history ──────────────────────────────────────
@@ -462,6 +502,30 @@ async def watchlist_remove(req: WatchlistRemoveRequest):
     except Exception as e:
         logger.error(f"watchlist_remove error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── GET /social-proof — community review signals ──────────────────────────────
+
+@router.get("/social-proof")
+async def social_proof_endpoint(title: str, query: str = ""):
+    """
+    Fetch Reddit/YouTube social signals for a product title.
+    Returns sentiment, highlights, and source links.
+    """
+    from agents.social_proof import get_social_proof
+    try:
+        result = await asyncio.to_thread(get_social_proof, title, query)
+        return result
+    except Exception as e:
+        logger.error(f"social_proof error: {e}")
+        return {
+            "sentiment":       "neutral",
+            "sentiment_emoji": "⚪",
+            "highlights":      [],
+            "source_count":    0,
+            "reddit_url":      None,
+            "youtube_url":     None,
+        }
 
 
 # ── Conversational endpoints (Part D) ─────────────────────────────────────────

@@ -154,6 +154,54 @@ def _build_battle_prompt(a: dict, b: dict) -> str:
     )
 
 
+def _get_community_sentiment(product_title: str) -> str | None:
+    """Search trusted community sites via Serper and summarize with Groq."""
+    import os, requests, json
+    api_key = os.getenv("SERPER_API_KEY")
+    if not api_key:
+        return None
+    
+    # Scoped search to trusted community hubs
+    query = f"{product_title} review site:reddit.com OR site:youtube.com OR site:techradar.com OR site:twitter.com OR site:instagram.com"
+    try:
+        r = requests.post(
+            "https://google.serper.dev/search",
+            headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
+            json={"q": query, "num": 10},
+            timeout=8
+        )
+        r.raise_for_status()
+        data = r.json()
+    except Exception as e:
+        logger.warning(f"Serper sentiment search failed: {e}")
+        return None
+
+    snippets = []
+    for item in data.get("organic", [])[:8]:
+        snip = item.get("snippet")
+        if snip:
+            snippets.append(snip)
+    
+    if not snippets:
+        return None
+
+    context = "\n".join(f"- {s}" for s in snippets)
+    prompt = (
+        f"You are a shopping assistant analyzing community feedback for '{product_title}'.\n\n"
+        f"Recent community posts/reviews:\n{context}\n\n"
+        f"Synthesize this into exactly one punchy, impactful sentence summarizing the community consensus. "
+        f"Start with something like 'Highly rated by the community — ' or 'Mixed impressions online — '. "
+        f"Do not mention the source snippets directly, just the sentiment."
+    )
+
+    try:
+        sentiment = _call_groq(prompt, PRIMARY_MODEL, max_tokens=60)
+        return sentiment
+    except Exception as e:
+        logger.warning(f"Groq sentiment summary failed: {e}")
+        return None
+
+
 def decision_agent(state: AgentState) -> dict:
     """
     Select the top-scored product and generate a justification.
@@ -171,6 +219,9 @@ def decision_agent(state: AgentState) -> dict:
     top = scored[0]
     prompt = _build_prompt(top, scored)
 
+    # Social Proof: Community Sentiment
+    community_sentiment = _get_community_sentiment(top["title"])
+    
     # Try primary model for standard justification
     try:
         justification = _call_groq(prompt, PRIMARY_MODEL)
@@ -211,6 +262,7 @@ def decision_agent(state: AgentState) -> dict:
         "recommendation": {
             **top,
             "justification": justification,
+            "community_sentiment": community_sentiment,
             "rank":          1,
             "total_compared": len(scored),
         },

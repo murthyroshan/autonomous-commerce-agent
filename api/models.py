@@ -68,4 +68,6 @@ class ConfirmResponse(BaseModel):
     success:      bool
     tx_id:        Optional[str] = None
     explorer_url: Optional[str] = None
+    app_id:       Optional[int] = None   # smart contract app id (Phase 5 escrow)
+    contract_url: Optional[str] = None  # link to the escrow smart contract
     error:        Optional[str] = None

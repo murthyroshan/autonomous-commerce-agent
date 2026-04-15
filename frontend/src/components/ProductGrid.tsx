@@ -34,6 +34,7 @@ export function ProductGrid({ products, recommendation }: ProductGridProps) {
           isWinner
           index={0}
           justification={recommendation?.justification}
+          communitySentiment={recommendation?.community_sentiment}
         />
       </div>
 
