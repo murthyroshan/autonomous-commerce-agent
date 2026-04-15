@@ -109,6 +109,169 @@ def _detect_category(query: str) -> str:
     return "default"
 
 
+# ── Exact model detection ──────────────────────────────────────────────────────
+
+def _is_exact_model_query(query: str) -> bool:
+    """
+    Return True if the query looks like a specific model lookup
+    (e.g. "oneplus 13", "iphone 15 pro") rather than a broad
+    category search (e.g. "best phone under 30000").
+
+    Heuristic: query contains a brand name AND a model number
+    and does NOT contain category/budget words.
+    """
+    import re
+    q = query.lower().strip()
+
+    # Must contain a recognisable model number (2–4 digits)
+    if not re.search(r'\b\d{2,4}\b', q):
+        return False
+
+    # Must contain a known phone/laptop brand
+    exact_brands = [
+        "oneplus", "iphone", "samsung", "pixel", "redmi",
+        "realme", "oppo", "vivo", "nothing", "iqoo",
+        "mi ", " mi ", "poco", "moto", "motorola",
+        "macbook", "thinkpad", "ideapad", "galaxy",
+    ]
+    if not any(b in q for b in exact_brands):
+        return False
+
+    # Broad / budget / category queries are NOT exact model queries
+    broad_signals = [
+        "best", "top", "under", "below", "budget", "cheap",
+        "gaming", "flagship", "recommend", "which",
+    ]
+    if any(s in q for s in broad_signals):
+        return False
+
+    return True
+
+
+# ── Known model price ranges ──────────────────────────────────────────────────
+
+KNOWN_MODEL_PRICES: dict[str, tuple[int, int]] = {
+    # "brand model_num": (min_INR, max_INR)
+    "oneplus 13":   (60000, 95000),
+    "oneplus 12":   (55000, 85000),
+    "oneplus 11":   (45000, 75000),
+    "oneplus 13r":  (35000, 55000),
+    "oneplus 12r":  (30000, 50000),
+    "iphone 15":    (65000, 180000),
+    "iphone 14":    (55000, 140000),
+    "iphone 13":    (45000, 110000),
+    "samsung s24":  (65000, 160000),
+    "samsung s23":  (45000, 130000),
+    "pixel 9":      (70000, 140000),
+    "pixel 8":      (55000, 120000),
+}
+
+
+def _check_model_price_sanity(product: dict, query: str) -> bool:
+    """
+    Return False if a product's price is outside the known range
+    for that specific model, catching mislabelled variants.
+    """
+    q = query.lower().strip()
+    for model_key, (min_p, max_p) in KNOWN_MODEL_PRICES.items():
+        if model_key in q:
+            price = product.get("price", 0)
+            if price < min_p or price > max_p:
+                logger.info(
+                    f"Price sanity failed for '{product['title']}': "
+                    f"₹{price:,.0f} outside known range "
+                    f"₹{min_p:,}–₹{max_p:,} for '{model_key}'"
+                )
+                return False
+    return True
+
+
+def _filter_exact_model_results(
+    results: list[dict],
+    query: str,
+) -> list[dict]:
+    """
+    When query is an exact model search, remove results whose titles
+    contain variant suffixes not present in the query.
+
+    Example: query="oneplus 13" removes any result whose title
+    contains "13r", "13s", "13t", "13 pro" unless the query
+    itself contains those words.
+    """
+    import re
+
+    if not _is_exact_model_query(query):
+        return results
+
+    q = query.lower().strip()
+
+    # Extract the primary model number from the query
+    model_match = re.search(r'\b(\d{2,4})\b', q)
+    if not model_match:
+        return results
+
+    model_num = model_match.group(1)
+
+    # Variant pattern: model number immediately followed by letters
+    # e.g. 13r, 13s, 13t, 12 pro, 12 lite (with optional space)
+    variant_pattern = re.compile(
+        rf'\b{re.escape(model_num)}\s*[a-z]+\b',
+        re.IGNORECASE,
+    )
+
+    # Which variants does the QUERY itself contain?
+    # e.g. "oneplus 13r" → query_variants = {"13r"}
+    # e.g. "oneplus 13"  → query_variants = {} (base model, no variant suffix)
+    query_variants = {
+        m.group().lower().replace(" ", "")
+        for m in variant_pattern.finditer(q)
+    }
+
+    filtered: list[dict] = []
+    for product in results:
+        title = product.get("title", "").lower()
+
+        title_variants = {
+            m.group().lower().replace(" ", "")
+            for m in variant_pattern.finditer(title)
+        }
+
+        if query_variants:
+            # Query IS a variant (e.g. "13r") — only keep titles that
+            # contain exactly those variant tokens; drop base and other variants
+            if title_variants != query_variants and not (query_variants & title_variants):
+                logger.info(
+                    f"Filtered non-matching variant: '{product['title']}' "
+                    f"(wanted: {query_variants}, title has: {title_variants})"
+                )
+                continue
+        else:
+            # Query is the base model (e.g. "13") — drop any title with variant suffixes
+            extra_variants = title_variants - query_variants
+            if extra_variants:
+                logger.info(
+                    f"Filtered variant: '{product['title']}' "
+                    f"(extra variants: {extra_variants})"
+                )
+                continue
+
+        # Model-aware price sanity
+        if not _check_model_price_sanity(product, query):
+            logger.info(
+                f"Filtered price-anomalous listing: "
+                f"'{product['title']}' ₹{product.get('price', 0):,.0f}"
+            )
+            continue
+
+        filtered.append(product)
+
+    logger.info(
+        f"Exact model filter: {len(results)} → {len(filtered)} "
+        f"results for '{query}'"
+    )
+    return filtered
+
+
 # ── Price sanity validation ───────────────────────────────────────────────────
 
 PRICE_SANITY: dict[str, dict[str, float]] = {
@@ -280,6 +443,7 @@ def _parse_serper_response(
     data: dict,
     max_price: float | None = None,
     category: str = "default",
+    query: str = "",
 ) -> list[dict]:
     """Parse Serper shopping response into sanitised, normalised product dicts."""
     products = []
@@ -299,6 +463,17 @@ def _parse_serper_response(
         # Filter accessories / irrelevant results
         title = item.get("title", "Unknown Product")
         if not _is_relevant(title, category):
+            continue
+
+        # Drop refurbished/renewed items unless explicitly requested
+        t_lower = title.lower()
+        q_lower = query.lower()
+        refurb_flags = ["refurbished", "renewed", "pre-owned", "pre owned"]
+        is_refurb = any(f in t_lower for f in refurb_flags)
+        wants_refurb = any(f in q_lower for f in refurb_flags)
+        
+        if is_refurb and not wants_refurb:
+            logger.info(f"Filtering refurbished product: '{title}'")
             continue
 
         # Fix broken 'ibp=oshop' links by generating a standard Google Shopping link
@@ -339,7 +514,7 @@ def _call_serper(
     )
     r.raise_for_status()
     raw = r.json()
-    return _parse_serper_response(raw, max_price=max_price, category=category)
+    return _parse_serper_response(raw, max_price=max_price, category=category, query=query)
 
 
 # ── Tier 2: Groq Compound (web search fallback) ───────────────────────────────
@@ -439,6 +614,7 @@ def search_agent(state: AgentState) -> dict:
         if os.getenv("SERPER_API_KEY"):
             try:
                 results = _call_serper(query, max_price=max_price, category=category)
+                results = _filter_exact_model_results(results, query)  # Fix 1
                 logger.info(f"Serper returned {len(results)} products (cap=₹{max_price})")
 
                 # Broaden if too few results
@@ -464,6 +640,7 @@ def search_agent(state: AgentState) -> dict:
         if os.getenv("GROQ_API_KEY"):
             try:
                 results = _call_groq_search(query, max_price=max_price, category=category)
+                results = _filter_exact_model_results(results, query)  # Fix 1
                 if results:
                     logger.info(f"Groq fallback returned {len(results)} products")
                     return results, False

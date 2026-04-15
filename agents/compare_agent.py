@@ -57,6 +57,39 @@ WEIGHTS = {
     "review_count": 0.20,
 }
 
+# General search: price-heavy (affordability wins)
+WEIGHTS_GENERAL = {
+    "price":        0.45,
+    "rating":       0.35,
+    "review_count": 0.20,
+}
+
+# Exact model search: quality > price (user already chose the model)
+WEIGHTS_EXACT_MODEL = {
+    "price":        0.25,
+    "rating":       0.50,
+    "review_count": 0.25,
+}
+
+
+def _get_weights(query: str = "") -> dict:
+    """Return weight dict based on whether query is an exact model lookup."""
+    try:
+        from .search_agent import _is_exact_model_query
+        if _is_exact_model_query(query):
+            logger.info(
+                f"Using EXACT_MODEL weights for query: '{query}' "
+                f"(rating={WEIGHTS_EXACT_MODEL['rating']})"
+            )
+            return WEIGHTS_EXACT_MODEL
+    except Exception:
+        pass
+    logger.info(
+        f"Using GENERAL weights for query: '{query}' "
+        f"(price={WEIGHTS_GENERAL['price']})"
+    )
+    return WEIGHTS_GENERAL
+
 NEUTRAL_RATING   = 2.5
 CONFIDENCE_FLOOR = 100   # reviews needed for full confidence
 
@@ -220,6 +253,9 @@ def compare_agent(state: AgentState, user_id: str = "demo") -> dict:
     rating_scores = _normalize(ratings)
     review_scores = _log_normalize(reviews)  # Feature 1.1: log normalization
 
+    query = state.get("query", "")
+    weights = _get_weights(query)
+
     all_prices = prices  # alias for anomaly detection
 
     # ── Scoring loop ──────────────────────────────────────────────────────────
@@ -227,9 +263,9 @@ def compare_agent(state: AgentState, user_id: str = "demo") -> dict:
     for i, product in enumerate(products):
         # Step 1: base score
         base = (
-            WEIGHTS["price"]        * price_scores[i] +
-            WEIGHTS["rating"]       * rating_scores[i] +
-            WEIGHTS["review_count"] * review_scores[i]
+            weights["price"]        * price_scores[i] +
+            weights["rating"]       * rating_scores[i] +
+            weights["review_count"] * review_scores[i]
         )
 
         # Step 2: anomaly check

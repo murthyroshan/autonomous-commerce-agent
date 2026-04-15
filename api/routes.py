@@ -154,11 +154,6 @@ async def search_stream(query: str, user_id: str = Query(default="demo")):
                 compare_result = await asyncio.to_thread(compare_agent, state, user_id)
                 state.update(compare_result)
 
-                # Extract battlefield contenders for standard mode
-                scored = state.get("scored_products", [])
-                if len(scored) >= 2:
-                    state["battle_contenders"] = [scored[0], scored[1]]
-
                 # Step 3: Decision
                 yield sse({"type": "status", "message": "Generating recommendation..."})
                 decision_result = await asyncio.to_thread(decision_agent, state)
