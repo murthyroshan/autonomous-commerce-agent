@@ -26,8 +26,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${inter.variable} min-h-screen scroll-smooth`} suppressHydrationWarning>
-      <body className="flex flex-col min-h-screen antialiased bg-[#0a0a0a] overflow-x-hidden relative">
-        <TerrainBackground />
+      <body className="flex flex-col min-h-screen antialiased bg-[#0a0a0a] gradient-bg overflow-x-hidden relative">
         <CustomCursor />
         <Navbar />
         {children}
