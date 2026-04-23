@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { Navbar } from '@/components/Navbar'
 import { CustomCursor } from '@/components/CustomCursor'
+import { GlobalStateProvider } from '@/store/globalStore'
 
 const inter = Inter({
   variable: '--font-inter',
@@ -27,10 +28,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} min-h-screen scroll-smooth`} suppressHydrationWarning>
       <body className="flex flex-col min-h-screen antialiased bg-[#0a0a0a] gradient-bg overflow-x-hidden relative">
-        <TerrainBackground />
-        <CustomCursor />
-        <Navbar />
-        {children}
+        <GlobalStateProvider>
+          <TerrainBackground />
+          <CustomCursor />
+          <Navbar />
+          {children}
+        </GlobalStateProvider>
       </body>
     </html>
   )

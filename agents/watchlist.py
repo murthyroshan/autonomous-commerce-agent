@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import tempfile
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -74,6 +75,7 @@ def add_to_watchlist(
 
     Entry structure:
     {
+        "id":            str (UUID4),
         "title":         str,
         "current_price": float,
         "target_price":  float,
@@ -85,12 +87,14 @@ def add_to_watchlist(
         "triggered":     false,
     }
     Creates watchlist/ directory if needed.
-    If an entry with the same title already exists it is replaced.
+    If an entry with the same title already exists it is replaced
+    (preserving its original id).
     """
     os.makedirs(WATCHLIST_DIR, exist_ok=True)
     items = _load_watchlist_raw(user_id)
 
     entry = {
+        "id":            str(uuid.uuid4()),
         "title":         product.get("title", ""),
         "current_price": float(product.get("price", 0) or 0),
         "target_price":  float(target_price),
@@ -102,10 +106,11 @@ def add_to_watchlist(
         "triggered":     False,
     }
 
-    # Replace existing entry with same title, or append
+    # Replace existing entry with same title (preserve its id), or append
     replaced = False
     for i, item in enumerate(items):
         if item.get("title") == entry["title"]:
+            entry["id"] = item.get("id") or entry["id"]  # keep stable id
             items[i] = entry
             replaced = True
             break
@@ -127,18 +132,27 @@ def get_watchlist(user_id: str) -> list[dict]:
     return _load_watchlist_raw(user_id)
 
 
-def remove_from_watchlist(user_id: str, title: str) -> None:
+def remove_from_watchlist(user_id: str, title: str = "", item_id: str = "") -> None:
     """
-    Remove all entries whose title matches `title` from user_id's watchlist.
-    Silently does nothing if the title is not found.
+    Remove entries from user_id's watchlist.
+    Matches by item_id first (exact UUID), falls back to title match.
+    Either argument alone is sufficient; both may be supplied for safety.
+    Silently does nothing if no matching entry is found.
     """
     items = _load_watchlist_raw(user_id)
-    new_items = [item for item in items if item.get("title") != title]
+    new_items = [
+        item for item in items
+        if item.get("id") != item_id and item.get("title") != title
+    ]
     if len(new_items) != len(items):
         _save_watchlist_raw(user_id, new_items)
-        logger.info(f"remove_from_watchlist({user_id}): removed '{title}'")
+        logger.info(
+            f"remove_from_watchlist({user_id}): removed id='{item_id}' title='{title}'"
+        )
     else:
-        logger.debug(f"remove_from_watchlist({user_id}): '{title}' not found")
+        logger.debug(
+            f"remove_from_watchlist({user_id}): no match for id='{item_id}' title='{title}'"
+        )
 
 
 def check_watchlist_item(item: dict) -> Optional[dict]:
