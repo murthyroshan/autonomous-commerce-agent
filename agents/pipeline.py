@@ -120,9 +120,18 @@ def _pin_best_match(sub_query: str, products: list[dict]) -> dict | None:
         import re
         if re.search(rf'\b{re.escape(sub_query.lower())}\b', product["title"].lower()):
             combined += 1.0
+
+        for token in query_tokens:
+            if len(token) >= 2:
+                suffix_pattern = rf'\b{re.escape(token)}[a-z]+\b'
+                match = re.search(suffix_pattern, product["title"].lower())
+                if match and match.group() not in query_tokens:
+                    combined -= 0.6
             
         if combined > best_score:
             best_score = combined
+            best_product = product
+
     return best_product or products[0]
 
 
