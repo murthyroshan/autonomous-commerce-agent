@@ -7,28 +7,45 @@ import algosdk from 'algosdk'
 // Module-level singleton so all components share the same Pera session.
 const peraWallet = new PeraWalletConnect()
 
+let globalAddress: string | null = null
+let globalConnected: boolean = false
+const stateListeners = new Set<() => void>()
+
+function updateGlobalState(addr: string | null, isConn: boolean) {
+  if (globalAddress === addr && globalConnected === isConn) return
+  globalAddress = addr
+  globalConnected = isConn
+  stateListeners.forEach((fn) => fn())
+}
+
 export function usePeraWallet() {
-  const [address, setAddress] = useState<string | null>(null)
-  const [connected, setConnected] = useState(false)
+  const [address, setAddress] = useState<string | null>(globalAddress)
+  const [connected, setConnected] = useState(globalConnected)
 
   useEffect(() => {
+    const listener = () => {
+      setAddress(globalAddress)
+      setConnected(globalConnected)
+    }
+    stateListeners.add(listener)
+
     // Try to restore a previous session on mount.
-    peraWallet
-      .reconnectSession()
-      .then((accounts: string[]) => {
-        if (accounts.length) {
-          setAddress(accounts[0])
-          setConnected(true)
-        }
-      })
-      .catch(() => {
-        // No prior session saved — that's fine.
-      })
+    if (!globalConnected) {
+      peraWallet
+        .reconnectSession()
+        .then((accounts: string[]) => {
+          if (accounts.length) {
+            updateGlobalState(accounts[0], true)
+          }
+        })
+        .catch(() => {
+          // No prior session saved — that's fine.
+        })
+    }
 
     // Keep React state in sync if the user disconnects from the Pera mobile app.
     const handleDisconnect = () => {
-      setAddress(null)
-      setConnected(false)
+      updateGlobalState(null, false)
     }
 
     // The Pera SDK exposes a WalletConnect connector underneath.
@@ -38,8 +55,7 @@ export function usePeraWallet() {
     }
 
     return () => {
-      // Cleanup is not strictly needed for module-level singletons
-      // but avoids memory leaks in dev hot-reloads.
+      stateListeners.delete(listener)
     }
   }, [])
 
@@ -51,8 +67,7 @@ export function usePeraWallet() {
     try {
       const accounts = await peraWallet.connect()
       const first = accounts[0] ?? null
-      setAddress(first)
-      setConnected(Boolean(first))
+      updateGlobalState(first, Boolean(first))
       return first
     } catch {
       // User cancelled the modal — not an error.
@@ -63,8 +78,7 @@ export function usePeraWallet() {
   /** Disconnect and clear local state. */
   const disconnect = () => {
     peraWallet.disconnect()
-    setAddress(null)
-    setConnected(false)
+    updateGlobalState(null, false)
   }
 
   /**
@@ -76,8 +90,8 @@ export function usePeraWallet() {
    */
   const signTransaction = async (txnB64: string, signerAddress: string): Promise<number[] | null> => {
     if (!peraWallet.isConnected) {
-      console.error('Cannot sign: Pera wallet not connected')
-      return null
+      updateGlobalState(null, false)
+      throw new Error('Pera wallet not connected. Please connect your wallet to sign.')
     }
     // We do not rely on the React state closures (`connected`, `address`) here because
     // if the user connects during the same render cycle (e.g. inside handleConfirm),
@@ -88,6 +102,11 @@ export function usePeraWallet() {
       const connector = (peraWallet as unknown as { connector?: unknown }).connector
       if (!connector) {
         await peraWallet.reconnectSession()
+      }
+
+      if (!peraWallet.isConnected) {
+        updateGlobalState(null, false)
+        throw new Error('Pera wallet not connected. Please connect your wallet to sign.')
       }
 
       const txnBytes = Uint8Array.from(atob(txnB64), (c) => c.charCodeAt(0))
