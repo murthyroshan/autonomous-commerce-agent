@@ -187,7 +187,8 @@ def compare_agent(state: AgentState, user_id: str = "demo") -> dict:
         Each product gets a new "score" key (float, 4 decimal places),
         "rating_verified" boolean, badge data, and metadata fields.
     """
-    products = state.get("search_results", [])
+    import copy
+    products = copy.deepcopy(state.get("search_results", []))
     if not products:
         logger.warning("compare_agent called with empty search_results")
         return {"scored_products": []}
