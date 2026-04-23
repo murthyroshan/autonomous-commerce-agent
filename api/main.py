@@ -50,6 +50,9 @@ app.add_middleware(
 
 @app.middleware("http")
 async def api_key_guard(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
+        
     secret = os.getenv("API_SECRET_KEY")
     if secret and request.url.path.startswith("/api/") and request.url.path != "/api/health":
         key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
