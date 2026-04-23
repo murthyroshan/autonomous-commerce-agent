@@ -145,11 +145,11 @@ def _build_battle_prompt(a: dict, b: dict) -> str:
 
     return (
         f"You are an expert shopping referee doing a head-to-head product battle.\n\n"
-        f"CONTENDER A:\n{fmt(a)}\n\n"
+        f"CONTENDER A (Winner):\n{fmt(a)}\n\n"
         f"CONTENDER B:\n{fmt(b)}\n\n"
         f"Write a punchy 2-3 sentence 'Tale of the Tape'. "
         f"Compare them directly on price, value, and where each one wins. "
-        f"End with one declarative sentence declaring the winner by name. "
+        f"End with one declarative sentence declaring Contender A ({a['title']}) as the explicit winner. "
         f"Be specific, bold, and direct. Do not use bullet points."
     )
 
