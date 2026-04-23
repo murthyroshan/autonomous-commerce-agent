@@ -5,7 +5,7 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routes import router
@@ -47,6 +47,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def api_key_guard(request: Request, call_next):
+    secret = os.getenv("API_SECRET_KEY")
+    if secret and request.url.path.startswith("/api/") and request.url.path != "/api/health":
+        key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
+        if key != secret:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=401, content={"detail": "Unauthorised"})
+    return await call_next(request)
 
 app.include_router(router, prefix="/api")
 
