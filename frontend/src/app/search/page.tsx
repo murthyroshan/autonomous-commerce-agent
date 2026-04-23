@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useAgentStream, type BudgetMiss } from '@/hooks/useAgentStream'
 import { ChatFlow } from '@/components/ChatFlow'
 import { StatusTicker } from '@/components/StatusTicker'
@@ -9,19 +10,16 @@ import { ProductGrid } from '@/components/ProductGrid'
 import { motion, AnimatePresence } from 'framer-motion'
 import { BattleArena } from '@/components/BattleArena'
 
-export default function HomePage() {
+function SearchContent() {
   const [query, setQuery] = useState<string | null>(null)
 
   const [initialQ, setInitialQ] = useState<string>('')
 
+  const searchParams = useSearchParams()
   useEffect(() => {
-    // Read the query parameter passed from the landing page
-    const params = new URLSearchParams(window.location.search);
-    const q = params.get('q');
-    if (q) {
-      setInitialQ(q);
-    }
-  }, []);
+      const q = searchParams.get('q')
+      if (q) setInitialQ(q)
+  }, [searchParams])
 
   const { status, result, loading, streamError } = useAgentStream(query)
   const [dismissedBudgetMiss, setDismissedBudgetMiss] = useState(false)
@@ -261,6 +259,10 @@ export default function HomePage() {
   )
 }
 
-
-
-
+export default function HomePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen pt-32 text-center text-zinc-400">Loading...</div>}>
+      <SearchContent />
+    </Suspense>
+  )
+}

@@ -294,7 +294,7 @@ def _deduplicate(products: list[dict]) -> list[dict]:
     """
     seen: dict[str, dict] = {}
     for p in products:
-        key = p["title"].lower()[:40].strip()
+        key = f"{p['title'].lower()[:25].strip()}_{round(p['price'] / 100) * 100}"
         if key not in seen:
             seen[key] = p
         else:

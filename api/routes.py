@@ -45,6 +45,9 @@ async def search(request: SearchRequest, user_id: str = Query(default="demo")):
             scored_products=result.get("scored_products", []),
             recommendation=result.get("recommendation") or None,
             error=result.get("error"),
+            budget_miss=result.get("budget_miss"),
+            battle_contenders=result.get("battle_contenders"),
+            battle_report=result.get("battle_report"),
         )
     except Exception as e:
         logger.error(f"Pipeline error: {e}", exc_info=True)
