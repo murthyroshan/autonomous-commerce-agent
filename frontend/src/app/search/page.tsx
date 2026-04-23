@@ -33,11 +33,7 @@ function SearchContent() {
   const battleWinner = result?.recommendation ?? null
 
   // For the grid: exclude battle contenders to avoid duplicates
-  const gridProducts = battleContenders && result?.scored_products
-    ? result.scored_products.filter(
-        p => !battleContenders.some(c => c.title === p.title)
-      )
-    : result?.scored_products ?? []
+  const gridProducts = result?.scored_products ?? []
 
   const budgetMiss: BudgetMiss | null =
     !dismissedBudgetMiss && result?.budget_miss ? result.budget_miss : null
@@ -204,7 +200,7 @@ function SearchContent() {
           {gridProducts.length > 0 && (
             <ProductGrid
               products={gridProducts}
-              recommendation={battleContenders ? null : result.recommendation}
+              recommendation={result.recommendation}
             />
           )}
         </section>
