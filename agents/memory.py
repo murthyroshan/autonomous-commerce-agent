@@ -12,11 +12,18 @@ Never raises — all callers wrap in try/except.
 import json
 import logging
 import os
+import re
 import tempfile
 from datetime import datetime, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+def _safe_user_id(user_id: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9_\-]", "", user_id)
+    if not cleaned:
+        return "demo"
+    return cleaned[:64]
 
 PREFS_DIR = "prefs"
 HISTORY_DIR = "history"
@@ -39,7 +46,7 @@ def load_prefs(user_id: str) -> dict:
     Creates the prefs/ directory if needed.
     """
     os.makedirs(PREFS_DIR, exist_ok=True)
-    path = os.path.join(PREFS_DIR, f"{user_id}.json")
+    path = os.path.join(PREFS_DIR, f"{_safe_user_id(user_id)}.json")
     if not os.path.exists(path):
         return dict(_DEFAULT_PREFS)
     try:
@@ -62,7 +69,7 @@ def save_pref(user_id: str, key: str, value) -> None:
     os.makedirs(PREFS_DIR, exist_ok=True)
     prefs = load_prefs(user_id)
     prefs[key] = value
-    path = os.path.join(PREFS_DIR, f"{user_id}.json")
+    path = os.path.join(PREFS_DIR, f"{_safe_user_id(user_id)}.json")
     # Atomic write: write to a temp file in the same directory, then rename
     dir_ = os.path.dirname(os.path.abspath(path))
     fd, tmp_path = tempfile.mkstemp(dir=dir_, suffix=".tmp")
@@ -128,7 +135,7 @@ def log_purchase(user_id: str, product: dict, tx_id: Optional[str], app_id: Opti
     Creates the history/ directory if it does not exist.
     """
     os.makedirs(HISTORY_DIR, exist_ok=True)
-    path = os.path.join(HISTORY_DIR, f"{user_id}.jsonl")
+    path = os.path.join(HISTORY_DIR, f"{_safe_user_id(user_id)}.jsonl")
     entry = {
         "title":     product.get("title", ""),
         "price":     product.get("price"),
@@ -153,7 +160,7 @@ def update_purchase_status(user_id: str, app_id: int, new_status: str) -> None:
     Updates the escrow_status of a specific purchase identified by app_id in the user's history jsonl.
     Since jsonl is append-only, this rewrites the file safely.
     """
-    path = os.path.join(HISTORY_DIR, f"{user_id}.jsonl")
+    path = os.path.join(HISTORY_DIR, f"{_safe_user_id(user_id)}.jsonl")
     if not os.path.exists(path):
         return
         
@@ -193,7 +200,7 @@ def get_history(user_id: str, limit: int = 100) -> list[dict]:
     Return the last `limit` purchase entries for user_id, newest first.
     Returns [] if the history file does not exist.
     """
-    path = os.path.join(HISTORY_DIR, f"{user_id}.jsonl")
+    path = os.path.join(HISTORY_DIR, f"{_safe_user_id(user_id)}.jsonl")
     if not os.path.exists(path):
         return []
     try:

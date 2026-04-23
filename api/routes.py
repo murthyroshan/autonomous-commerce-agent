@@ -3,9 +3,10 @@
 import asyncio
 import json
 import logging
+import os
 import re
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -53,7 +54,7 @@ async def search(request: SearchRequest, user_id: str = Query(default="demo")):
 # ── GET /search/stream — SSE streaming endpoint ───────────────────────────────
 
 @router.get("/search/stream")
-async def search_stream(query: str, user_id: str = Query(default="demo")):
+async def search_stream(request: Request, query: str, user_id: str = Query(default="demo")):
     """
     Run the pipeline step-by-step, streaming status updates via SSE.
     Frontend connects with EventSource("/search/stream?query=...").
@@ -78,6 +79,7 @@ async def search_stream(query: str, user_id: str = Query(default="demo")):
             state = initial_state(query.strip())
 
             if is_vs:
+                if await request.is_disconnected(): return
                 yield sse({"type": "status", "message": f"Organizing matchup: {side_a} vs {side_b}..."})
                 
                 def run_dual_search():
@@ -87,6 +89,7 @@ async def search_stream(query: str, user_id: str = Query(default="demo")):
                         fut_b = executor.submit(_run_single_search, side_b)
                         return fut_a.result(), fut_b.result()
 
+                if await request.is_disconnected(): return
                 results_a, results_b = await asyncio.to_thread(run_dual_search)
                 
                 if not results_a and not results_b:
@@ -123,14 +126,18 @@ async def search_stream(query: str, user_id: str = Query(default="demo")):
                 if contender_a and contender_b:
                     state["battle_contenders"] = [contender_a, contender_b]
 
+                if await request.is_disconnected(): return
                 yield sse({"type": "status", "message": "Referee evaluating matchup..."})
+                if await request.is_disconnected(): return
                 decision_result = await asyncio.to_thread(decision_agent, state)
                 state.update(decision_result)
 
             else:
                 # ── Standard Mode ──
                 # Step 1: Search
+                if await request.is_disconnected(): return
                 yield sse({"type": "status", "message": "Searching products..."})
+                if await request.is_disconnected(): return
                 search_result = await asyncio.to_thread(search_agent, state)
                 state.update(search_result)
 
@@ -150,7 +157,9 @@ async def search_stream(query: str, user_id: str = Query(default="demo")):
                     return
 
                 # Step 2: Compare
+                if await request.is_disconnected(): return
                 yield sse({"type": "status", "message": f"Comparing {len(state['search_results'])} products..."})
+                if await request.is_disconnected(): return
                 compare_result = await asyncio.to_thread(compare_agent, state, user_id)
                 state.update(compare_result)
 
@@ -160,7 +169,9 @@ async def search_stream(query: str, user_id: str = Query(default="demo")):
                     state["battle_contenders"] = [scored[0], scored[1]]
 
                 # Step 3: Decision
+                if await request.is_disconnected(): return
                 yield sse({"type": "status", "message": "Generating recommendation..."})
+                if await request.is_disconnected(): return
                 decision_result = await asyncio.to_thread(decision_agent, state)
                 state.update(decision_result)
 
@@ -185,7 +196,7 @@ async def search_stream(query: str, user_id: str = Query(default="demo")):
         headers={
             "Cache-Control":               "no-cache",
             "X-Accel-Buffering":           "no",
-            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Origin": os.getenv("FRONTEND_ORIGIN", "http://localhost:3000"),
         },
     )
 
@@ -277,6 +288,9 @@ async def submit_transaction(request: ConfirmRequest):
     """
     try:
         from blockchain.algorand import submit_signed_transaction
+
+        if request.signed_txn_bytes and len(request.signed_txn_bytes) > 4096:
+            raise HTTPException(status_code=400, detail="Transaction payload too large")
 
         if request.signed_txn_bytes:
             # Bypass base64 — accept raw integer array directly from JSON

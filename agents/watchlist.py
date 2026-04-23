@@ -9,17 +9,24 @@ Phase 6 scope: log alerts only — no push notifications.
 import json
 import logging
 import os
+import re
 import tempfile
 from datetime import datetime, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+def _safe_user_id(user_id: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9_\-]", "", user_id)
+    if not cleaned:
+        return "demo"
+    return cleaned[:64]
+
 WATCHLIST_DIR = "watchlist"
 
 
 def _watchlist_path(user_id: str) -> str:
-    return os.path.join(WATCHLIST_DIR, f"{user_id}.json")
+    return os.path.join(WATCHLIST_DIR, f"{_safe_user_id(user_id)}.json")
 
 
 def _load_watchlist_raw(user_id: str) -> list[dict]:

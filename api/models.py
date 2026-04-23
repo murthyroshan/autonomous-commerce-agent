@@ -1,6 +1,6 @@
 """api/models.py — Pydantic models for request/response validation."""
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 from typing import Optional
 
 
@@ -63,7 +63,7 @@ class ConfirmRequest(BaseModel):
     user_id:      str = "demo"
     sender_address: Optional[str] = None
     signed_txn_b64: Optional[str] = None
-    signed_txn_bytes: Optional[list[int]] = None
+    signed_txn_bytes: Optional[list[int]] = Field(default=None, max_length=4096)
     app_id: Optional[int] = None
     contract_url: Optional[str] = None
 

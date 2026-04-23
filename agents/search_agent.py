@@ -461,6 +461,8 @@ def _call_serper(
     category: str = "default",
 ) -> list[dict]:
     """Call Serper.dev Google Shopping API. Retries up to 3 times."""
+    import re
+    query = re.sub(r"[\x00-\x1f\x7f]", "", query)[:300]
     search_query = _enrich_query(query)
     r = requests.post(
         SERPER_ENDPOINT,
