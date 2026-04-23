@@ -521,7 +521,8 @@ class WatchlistAddRequest(BaseModel):
 
 class WatchlistRemoveRequest(BaseModel):
     user_id: str = "demo"
-    title:   str
+    title:   str = ""
+    item_id: str = ""
 
 
 @router.post("/watchlist")
@@ -558,10 +559,12 @@ async def watchlist_get(user_id: str = Query(default="demo")):
 
 @router.delete("/watchlist")
 async def watchlist_remove(req: WatchlistRemoveRequest):
-    """Remove an item from the watchlist by title."""
+    """Remove an item from the watchlist by id (preferred) or title (fallback)."""
     from agents.watchlist import remove_from_watchlist
     try:
-        await asyncio.to_thread(remove_from_watchlist, req.user_id, req.title)
+        await asyncio.to_thread(
+            remove_from_watchlist, req.user_id, req.title, req.item_id
+        )
         return {"success": True}
     except Exception as e:
         logger.error(f"watchlist_remove error: {e}")

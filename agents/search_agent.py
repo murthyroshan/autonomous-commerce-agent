@@ -288,20 +288,27 @@ def _affix_exclusion_check(query: str, products: list[dict]) -> list[dict]:
 
 def _deduplicate(products: list[dict]) -> list[dict]:
     """
-    Remove duplicate products. Two products are duplicates if their
-    titles are very similar (first 40 chars match after lowercasing).
-    Keep the one with the lower price.
+    Remove duplicate products. Two products are considered duplicates if
+    their titles share the same first 25 characters AND their prices are
+    within 0.5% of each other. Keeps the cheaper product.
     """
-    seen: dict[str, dict] = {}
+    result: list[dict] = []
     for p in products:
-        key = f"{p['title'].lower()[:25].strip()}_{round(p['price'] / 100) * 100}"
-        if key not in seen:
-            seen[key] = p
-        else:
-            # Keep cheaper one
-            if p["price"] < seen[key]["price"]:
-                seen[key] = p
-    return list(seen.values())
+        title_key = p["title"].lower()[:25].strip()
+        is_dup = False
+        for existing in result:
+            existing_key = existing["title"].lower()[:25].strip()
+            if title_key == existing_key:
+                price_diff_pct = abs(p["price"] - existing["price"]) / max(existing["price"], 1)
+                if price_diff_pct <= 0.005:  # within 0.5%
+                    # Keep the cheaper one
+                    if p["price"] < existing["price"]:
+                        result[result.index(existing)] = p
+                    is_dup = True
+                    break
+        if not is_dup:
+            result.append(p)
+    return result
 
 
 # ── Query enrichment ──────────────────────────────────────────────────────────
