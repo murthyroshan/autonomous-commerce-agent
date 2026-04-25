@@ -1,0 +1,37 @@
+*   [33mf3b9470[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m Merge branch 'test'
+[31m|[m[32m\[m  
+[31m|[m * [33mfe26fe5[m[33m ([m[1;31morigin/test[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mtest[m[33m)[m Refine deduplication and watchlist item handling
+[31m|[m * [33m591ce9b[m Clarify battle winner language and keep grid recommendations
+[31m|[m * [33mde7119d[m Refine search deduping and add search page suspense
+[31m|[m * [33m538b544[m Avoid mutating search results while improving pinning
+[31m|[m * [33m3ecb9bd[m Allow CORS preflight and harden Pera wallet sync
+[31m|[m * [33mb3e8304[m Harden API and user input handling
+[31m|[m * [33m2ecbcd9[m Optimisated the Website
+[31m|[m * [33m9f668c1[m Fixed Frontend Issues and Smart Contract Visibility
+[31m|[m * [33m4adddfb[m Smart Contract Escrow and Social Proof Added
+[31m|[m * [33me91e926[m fix: restore Pera wallet signing, surface escrow contract link, add social proof panel
+[31m|[m * [33md1e8102[m Optimized the Website and Improved Readme
+[31m|[m * [33m57793d0[m Fixed Pera Wallet
+[31m|[m * [33me7e0128[m Implement DDG auto-routing, strict token matching, and spec whitelisting
+* [32m|[m [33ma381c74[m[33m ([m[1;31morigin/master[m[33m)[m Fixed Features
+[32m|[m[32m/[m  
+* [33m9ea8c97[m Added Battle Mode,Price History Context
+* [33mdfbaa56[m Added 2 features : Deal Confidence Verdict, Smart Budget Negotiation
+* [33m7a1995d[m Fixed the navbar
+* [33m1ab98be[m Fixed Landing Page
+* [33mb841eae[m Improved the History,Watchlist Pages
+* [33mf9369c8[m Revamp landing animations and navbar wallet controls
+* [33ma1a6743[m Refresh navbar with links, logo, and wallet controls
+* [33med2c422[m[33m ([m[1;33mtag: [m[1;33mpurple-return[m[33m)[m Fix wallet flow bugs and add relevance-based product scoring
+* [33m2f54eff[m Enhance ranking trust signals and harden frontend runtime stability
+* [33m1fca916[m Add user preferences, history, and watchlist API support
+* [33m1a47702[m fix(blockchain): replace deprecated AlgoExplorer with Lora Algokit explorer
+* [33m58a0c66[m feat(phase4): implement Algorand blockchain logging for confirmed purchases
+* [33m04a7d22[m chore: stop tracking local check scripts
+* [33md7d0233[m docs: refresh README with product overview and setup flow
+* [33mb2a5fcc[m chore: ignore temp check scripts, frontend build artifacts, logs, and OS files
+* [33mb451183[m Implement core commerce agent pipeline and API integrations
+* [33m18b8df2[m Fixed the Search_agent
+* [33m211955f[m Improve mock catalog matching and enforce budget filtering
+* [33m5f59a97[m Add AGENTS.md with architecture and implementation guidelines
+* [33m94f186a[m chore: ignore assistant planning/instruction markdown files

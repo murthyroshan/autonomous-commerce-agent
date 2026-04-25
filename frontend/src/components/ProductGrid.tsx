@@ -35,6 +35,7 @@ export function ProductGrid({ products, recommendation }: ProductGridProps) {
           index={0}
           justification={recommendation?.justification}
           communitySentiment={recommendation?.community_sentiment}
+          allProducts={products}
         />
       </div>
 
@@ -47,6 +48,7 @@ export function ProductGrid({ products, recommendation }: ProductGridProps) {
               product={product}
               isWinner={false}
               index={i + 1}
+              allProducts={products}
             />
           ))}
         </div>

@@ -14,6 +14,7 @@ class AgentState(TypedDict):
     scored_products:  list[dict]   # products with 'score' field, sorted desc
     recommendation:   dict         # top product + 'justification' key
     error:            Optional[str]
+    category:         Optional[str]   # shared category detected from query
     budget_miss:      Optional[dict]  # set when no results found within budget
     battle_contenders: Optional[list]  # [contender_a, contender_b] for Battle Arena
     battle_report:    Optional[str]   # LLM referee verdict text
@@ -27,6 +28,7 @@ def initial_state(query: str) -> AgentState:
         "scored_products":  [],
         "recommendation":   {},
         "error":            None,
+        "category":         None,
         "budget_miss":      None,
         "battle_contenders": None,
         "battle_report":     None,

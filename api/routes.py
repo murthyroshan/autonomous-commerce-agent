@@ -86,10 +86,14 @@ async def search_stream(request: Request, query: str, user_id: str = Query(defau
                 yield sse({"type": "status", "message": f"Organizing matchup: {side_a} vs {side_b}..."})
                 
                 def run_dual_search():
+                    from agents.search_agent import _detect_category
+                    unified_category = _detect_category(query)
+                    if unified_category == "default":
+                        unified_category = _detect_category(side_a)
                     import concurrent.futures
                     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                        fut_a = executor.submit(_run_single_search, side_a)
-                        fut_b = executor.submit(_run_single_search, side_b)
+                        fut_a = executor.submit(_run_single_search, side_a, unified_category)
+                        fut_b = executor.submit(_run_single_search, side_b, unified_category)
                         return fut_a.result(), fut_b.result()
 
                 if await request.is_disconnected(): return
