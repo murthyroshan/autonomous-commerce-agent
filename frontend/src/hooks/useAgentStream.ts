@@ -28,6 +28,7 @@ export interface Recommendation extends ScoredProduct {
   justification: string
   rank: number
   total_compared: number
+  community_sentiment?: string
 }
 
 export interface BudgetMiss {

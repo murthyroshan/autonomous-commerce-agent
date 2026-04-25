@@ -4,8 +4,21 @@ import { useEffect, useState } from 'react'
 import { PeraWalletConnect } from '@perawallet/connect'
 import algosdk from 'algosdk'
 
+// WalletConnect v2 requires a projectId and dApp metadata so Pera mobile
+// knows what dApp it's connecting to ("dapp not responding" is caused when
+// this is missing).  Register your own at https://cloud.walletconnect.com —
+// the SDK has a built-in fallback but providing your own is recommended in
+// production.
+const WC_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? ''
+
 // Module-level singleton so all components share the same Pera session.
-const peraWallet = new PeraWalletConnect()
+const peraWallet = new PeraWalletConnect({
+  // Use chainId for testnet — must match the Algorand node the backend is connected to.
+  // WalletConnect v2 project ID — required to avoid "dapp not responding".
+  ...(WC_PROJECT_ID ? { projectId: WC_PROJECT_ID } : {}),
+  // dApp metadata displayed inside the Pera Wallet mobile UI.
+  chainId: 416002,  // Algorand testnet chain ID
+})
 
 let globalAddress: string | null = null
 let globalConnected: boolean = false

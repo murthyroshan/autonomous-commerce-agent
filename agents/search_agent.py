@@ -204,15 +204,86 @@ IRRELEVANT_KEYWORDS: dict[str, list[str]] = {
                    "memory card", "battery", "charger"],
 }
 
+# Cross-category blocklist: words that definitively mark a result as the WRONG
+# category entirely.  Applied BEFORE the affix exclusion check.
+# Keys are the queried category; values are title fragments that kill the result.
+CROSS_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
+    "phone": [
+        # Laptop / PC parts
+        "laptop battery", "laptop keyboard", "laptop charger", "laptop screen",
+        "notebook battery", "lcd screen", "display replacement", "keyboard compatible",
+        # Electrical / industrial
+        "power entry connector", "power supply", "isolation converter", "isolator",
+        "terminal block", "assembly terminal", "receptacle", "nema", "relay",
+        "circuit breaker", "din rail", "transformer",
+        # Stage / AV
+        "moving head", "beam light", "sharpy beam", "stage light", "lamp bulb",
+        # Automotive / tools
+        "alternator", "motor winding", "drill bit", "socket wrench",
+        # Second-hand / sell listings (not a product purchase)
+        "sell oneplus", "sell samsung", "sell iphone", "sell redmi",
+        # Spare parts
+        "original lcd", "original display", "replacement screen", "back panel replacement",
+        "screen display", "touch screen digitizer", "touch glass", "camera lens glass",
+        "display module", "display folder", "motherboard", "logic board",
+        "charging flex", "flex cable", "charging board",
+    ],
+    "laptop": [
+        # Phone parts
+        "mobile battery", "phone battery", "smartphone battery",
+        # Electrical / industrial
+        "power entry connector", "power supply", "isolation converter", "isolator",
+        "terminal block", "assembly terminal", "receptacle", "nema", "relay",
+        # Stage / AV
+        "moving head", "beam light", "sharpy beam", "stage light", "lamp bulb",
+    ],
+    "tv": [
+        "power entry connector", "power supply", "isolation converter",
+        "terminal block", "relay", "circuit breaker",
+        "moving head", "beam light", "stage light",
+    ],
+    "headphones": [
+        "power entry connector", "power supply", "isolation converter",
+        "terminal block", "relay", "stage light", "moving head",
+    ],
+    "earbuds": [
+        "power entry connector", "power supply", "isolation converter",
+        "terminal block", "relay", "stage light", "moving head",
+    ],
+}
+
 
 def _is_relevant(title: str, category: str) -> bool:
-    """Return False if the title looks like an accessory, not the main product."""
-    irrelevant = IRRELEVANT_KEYWORDS.get(category, [])
+    """Return False if the title looks like an accessory or a completely wrong
+    category product (cross-category contamination)."""
     title_lower = title.lower()
+
+    # Step 1: accessory filter (same-category accessories)
+    irrelevant = IRRELEVANT_KEYWORDS.get(category, [])
     for kw in irrelevant:
         if kw in title_lower:
             logger.info(f"Filtering accessory: '{title}'")
             return False
+
+    # Step 2: cross-category contamination filter
+    blocklist = CROSS_CATEGORY_BLOCKLIST.get(category, [])
+    for phrase in blocklist:
+        if phrase in title_lower:
+            logger.info(f"Cross-category filter [{category}]: '{title}' blocked by '{phrase}'")
+            return False
+
+    # Step 3: Specific regex blocks
+    if category == "phone":
+        # Block "battery" unless preceded by mAh/Ah which implies a spec on a phone
+        if re.search(r'\bbattery\b', title_lower) and not re.search(r'(mah|ah)\s*battery|\bbattery\s*(capacity|life)', title_lower):
+            logger.info(f"Regex filter [phone battery]: '{title}' blocked")
+            return False
+        
+        # Block generic LCD/display panels that don't match blocklist exactly
+        if re.search(r'\b(lcd|amoled|oled)\b.*\b(display|screen|panel|combo|folder)\b', title_lower):
+            logger.info(f"Regex filter [phone screen]: '{title}' blocked")
+            return False
+
     return True
 
 
@@ -306,17 +377,47 @@ def _deduplicate(products: list[dict]) -> list[dict]:
 
 # ── Query enrichment ──────────────────────────────────────────────────────────
 
-def _enrich_query(query: str) -> str:
-    """Append context for better Google Shopping results in the Indian market."""
+# Category-specific noun injected into the Serper query to prevent cross-category
+# contamination. E.g. 'oneplus 15 smartphone' won't return 'NEMA 5-15R connectors'.
+_CATEGORY_QUERY_NOUN: dict[str, str] = {
+    "phone":      "smartphone",
+    "laptop":     "laptop",
+    "tv":         "television",
+    "headphones": "headphones",
+    "earbuds":    "earbuds",
+    "tablet":     "tablet",
+    "speaker":    "bluetooth speaker",
+    "camera":     "camera",
+    "watch":      "smartwatch",
+    "keyboard":   "keyboard",
+    "mouse":      "mouse",
+}
+
+
+def _enrich_query(query: str, category: str = "default") -> str:
+    """Append context for better Google Shopping results in the Indian market.
+
+    Injects the category noun so searches like 'oneplus 15' don't bleed into
+    'NEMA 5-15R power connectors' — the category context pins Google Shopping
+    to the right product type at the API level, before any post-filtering.
+    """
     q = query.lower()
     # Already has platform or site context — leave as-is
     if any(w in q for w in ['amazon', 'flipkart', 'site:']):
         return query
+
+    # Inject category noun if it isn't already present in the query
+    cat_noun = _CATEGORY_QUERY_NOUN.get(category, "")
+    if cat_noun and cat_noun not in q:
+        enriched = f"{query} {cat_noun}"
+    else:
+        enriched = query
+
     # Already has India context — just add buy-intent
     if any(w in q for w in ['india', 'indian', 'inr', '₹']):
-        return f"{query} buy online"
+        return f"{enriched} buy online"
     # Generic: add India + buy-intent
-    return f"{query} buy online India"
+    return f"{enriched} buy online India"
 
 
 def _broaden_query(query: str) -> str:
@@ -430,8 +531,9 @@ def _parse_serper_response(
             elif "vijay sales" in source_lower:
                 raw_link = f"https://www.vijaysales.com/search/{safe_short}"
             elif "jiomart" in source_lower:
-                # JioMart search works only with short, clean query strings
-                raw_link = f"https://www.jiomart.com/search/{safe_short}"
+                # JioMart's search often breaks with %20. Fallback to DuckDuckGo for stability.
+                safe_source = urllib.parse.quote_plus(item.get("source", ""))
+                raw_link = f"https://duckduckgo.com/?q=%21ducky+{safe_title}+{safe_source}"
             elif "tata cliq" in source_lower:
                 raw_link = f"https://www.tatacliq.com/search/?searchCategory=all&text={safe_short}"
             else:
@@ -463,16 +565,28 @@ def _call_serper(
     """Call Serper.dev Google Shopping API. Retries up to 3 times."""
     import re
     query = re.sub(r"[\x00-\x1f\x7f]", "", query)[:300]
-    search_query = _enrich_query(query)
+    # Pass category so the query gets the right noun injected (e.g. 'smartphone')
+    search_query = _enrich_query(query, category=category)
+    logger.info(f"Serper query: '{search_query}'")
     r = requests.post(
         SERPER_ENDPOINT,
         headers={"X-API-KEY": os.getenv("SERPER_API_KEY", "")},
-        json={"q": search_query, "gl": "in", "num": 20},
+        json={"q": search_query, "gl": "in", "num": 30},
         timeout=10,
     )
     r.raise_for_status()
     raw = r.json()
-    return _parse_serper_response(raw, query=query, max_price=max_price, category=category)
+    results = _parse_serper_response(raw, query=query, max_price=max_price, category=category)
+
+    # Quality gate: if enough rated results exist, drop zero-signal products
+    # (no rating AND no reviews) — they're usually irrelevant or spare-part listings.
+    rated = [p for p in results if p["rating"] > 0 or p["review_count"] > 0]
+    if len(rated) >= 5:
+        dropped = len(results) - len(rated)
+        if dropped:
+            logger.info(f"Quality gate: dropped {dropped} zero-signal products")
+        return rated
+    return results
 
 
 # ── Tier 2: Groq Compound (web search fallback) ───────────────────────────────
@@ -545,7 +659,7 @@ def search_agent(state: AgentState) -> dict:
     """
     query    = state["query"]
     budget   = _extract_budget(query)
-    category = _detect_category(query)
+    category = state.get("category") or _detect_category(query)
 
     if budget:
         logger.info(f"Budget detected: ₹{budget:,.0f}")
@@ -588,6 +702,34 @@ def search_agent(state: AgentState) -> dict:
 
                 if results:
                     results = _affix_exclusion_check(query, results)
+
+                # ── Supplemental Amazon/Flipkart pass ─────────────────────────
+                # If fewer than 2 results are from Amazon or Flipkart, the main
+                # search was dominated by small marketplaces.  Run one extra call
+                # with a platform-targeted query to surface the big retailers.
+                if results and os.getenv("SERPER_API_KEY"):
+                    top_stores = sum(
+                        1 for p in results
+                        if any(s in p.get("source", "").lower() for s in ("amazon", "flipkart"))
+                    )
+                    if top_stores < 2:
+                        logger.info("Fewer than 2 Amazon/Flipkart results — running supplemental search")
+                        try:
+                            supplemental_q = f"{query} amazon.in flipkart"
+                            extra = _call_serper(supplemental_q, max_price=max_price, category=category)
+                            extra = _affix_exclusion_check(query, extra)
+                            existing_titles = {p["title"] for p in results}
+                            added = 0
+                            for p in extra:
+                                if p["title"] not in existing_titles:
+                                    results.append(p)
+                                    existing_titles.add(p["title"])
+                                    added += 1
+                            if added:
+                                logger.info(f"Supplemental search added {added} Amazon/Flipkart products")
+                        except Exception as e:
+                            logger.warning(f"Supplemental Amazon/Flipkart search failed: {e}")
+
                 if results:
                     return results, False
                 logger.warning("Serper returned 0 products")

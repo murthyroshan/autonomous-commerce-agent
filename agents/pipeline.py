@@ -18,7 +18,7 @@ import json
 import concurrent.futures
 
 from .state import AgentState, initial_state
-from .search_agent import search_agent, _get_groq_client
+from .search_agent import search_agent, _get_groq_client, _detect_category
 from .compare_agent import compare_agent
 from .decision_agent import decision_agent
 
@@ -78,9 +78,11 @@ def _parse_user_intent(query: str) -> dict:
     return {"mode": "standard", "items": [query]}
 
 
-def _run_single_search(sub_query: str) -> list[dict]:
+def _run_single_search(sub_query: str, category: str | None = None) -> list[dict]:
     """Search + compare pipeline for a single sub-query. Returns scored products."""
     sub_state = initial_state(sub_query)
+    if category:
+        sub_state["category"] = category
     sub_state.update(search_agent(sub_state))
     if not sub_state["search_results"]:
         return []
@@ -177,11 +179,17 @@ def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
     if is_vs and len(items) >= 2:
         side_a = items[0]
         side_b = items[1]
+        
+        # Detect category based on the ORIGINAL full query so side_b inherits it
+        unified_category = _detect_category(query)
+        if unified_category == "default":
+            unified_category = _detect_category(side_a)
+            
         # ── VS Mode: parallel dual-search ────────────────────────────────────
-        logger.info(f"VS mode detected: '{side_a}' vs '{side_b}'")
+        logger.info(f"VS mode detected: '{side_a}' vs '{side_b}' (category: {unified_category})")
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            fut_a = executor.submit(_run_single_search, side_a)
-            fut_b = executor.submit(_run_single_search, side_b)
+            fut_a = executor.submit(_run_single_search, side_a, unified_category)
+            fut_b = executor.submit(_run_single_search, side_b, unified_category)
             results_a = fut_a.result()
             results_b = fut_b.result()
 

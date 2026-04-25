@@ -5,6 +5,8 @@ import type { ScoredProduct } from '@/hooks/useAgentStream'
 import { motion, useMotionValue, useSpring, useTransform, useMotionTemplate } from 'framer-motion'
 import { usePeraWallet } from '@/hooks/usePeraWallet'
 import { SocialProofPanel } from '@/components/SocialProofPanel'
+import { ExplainDrawer } from './product/ExplainDrawer'
+import { BarChart3 } from 'lucide-react'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -24,6 +26,7 @@ interface ProductCardProps {
   index?: number
   justification?: string
   communitySentiment?: string
+  allProducts?: any[]
 }
 
 function sourceBadge(source: string) {
@@ -67,6 +70,7 @@ export function ProductCard({
   index = 0,
   justification,
   communitySentiment,
+  allProducts = [],
 }: ProductCardProps) {
   const scorePercent = Math.round((product.score ?? 0) * 100)
   const badge = sourceBadge(product.source)
@@ -91,6 +95,7 @@ export function ProductCard({
   const [watchState, setWatchState] = useState<WatchState>('hidden')
   const [targetPrice, setTargetPrice] = useState('')
   const [watchSaving, setWatchSaving] = useState(false)
+  const [showExplain, setShowExplain] = useState(false)
 
   const requestBody = {
     title: product.title,
@@ -515,49 +520,70 @@ export function ProductCard({
               </a>
             )}
 
-            {watchState === 'hidden' && (
-              <button
-                onClick={() => setWatchState('input')}
-                className="w-full rounded-xl px-4 py-2 text-xs font-medium transition-all"
-                style={{ background: 'rgba(124,58,237,0.08)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(124,58,237,0.14)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(124,58,237,0.08)')}
-              >
-                Watch for price drop
-              </button>
-            )}
-
-            {watchState === 'input' && (
-              <form onSubmit={handleWatchSubmit} className="flex gap-2">
-                <input
-                  type="number"
-                  placeholder="Target price (₹)"
-                  value={targetPrice}
-                  onChange={(e) => setTargetPrice(e.target.value)}
-                  className="flex-1 rounded-xl px-3 py-2 text-xs outline-none"
-                  style={{ background: '#1a1a1a', color: '#f5f5f5', border: '1px solid #333' }}
-                />
-                <button
-                  type="submit"
-                  disabled={watchSaving}
-                  className="rounded-xl px-3 py-2 text-xs font-semibold transition-opacity disabled:opacity-50"
-                  style={{ background: '#7c3aed', color: '#fff' }}
-                >
-                  {watchSaving ? '...' : 'Set'}
-                </button>
-              </form>
-            )}
-
-            {watchState === 'saved' && (
-              <div
-                className="w-full rounded-xl px-4 py-2 text-center text-xs"
-                style={{ background: 'rgba(124,58,237,0.08)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}
-              >
-                Watching for ₹{parseFloat(targetPrice).toLocaleString('en-IN', { maximumFractionDigits: 0 })} drop
-              </div>
-            )}
           </div>
         )}
+
+        <div className="mt-2 flex gap-2 w-full">
+          {watchState === 'hidden' && (
+            <button
+              onClick={() => setWatchState('input')}
+              className="flex-1 rounded-xl px-4 py-2 text-xs font-medium transition-all"
+              style={{ background: 'rgba(124,58,237,0.08)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(124,58,237,0.14)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(124,58,237,0.08)')}
+            >
+              Watch for price drop
+            </button>
+          )}
+
+          {watchState === 'input' && (
+            <form onSubmit={handleWatchSubmit} className="flex flex-1 gap-2">
+              <input
+                type="number"
+                placeholder="Target price (₹)"
+                value={targetPrice}
+                onChange={(e) => setTargetPrice(e.target.value)}
+                className="flex-1 rounded-xl px-3 py-2 text-xs outline-none min-w-0"
+                style={{ background: '#1a1a1a', color: '#f5f5f5', border: '1px solid #333' }}
+              />
+              <button
+                type="submit"
+                disabled={watchSaving}
+                className="rounded-xl px-3 py-2 text-xs font-semibold transition-opacity disabled:opacity-50"
+                style={{ background: '#7c3aed', color: '#fff' }}
+              >
+                {watchSaving ? '...' : 'Set'}
+              </button>
+            </form>
+          )}
+
+          {watchState === 'saved' && (
+            <div
+              className="flex-1 rounded-xl px-4 py-2 text-center text-xs"
+              style={{ background: 'rgba(124,58,237,0.08)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}
+            >
+              Watching for ₹{parseFloat(targetPrice).toLocaleString('en-IN', { maximumFractionDigits: 0 })} drop
+            </div>
+          )}
+
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            onClick={() => setShowExplain(true)}
+            title="Score Breakdown"
+            className="
+              w-10 h-10 rounded-xl flex-shrink-0
+              border border-[rgba(255,255,255,0.1)]
+              bg-gradient-to-br from-[rgba(255,255,255,0.05)] to-[rgba(255,255,255,0.01)]
+              hover:border-[rgba(232,160,69,0.4)]
+              hover:bg-[rgba(232,160,69,0.1)]
+              hover:shadow-[0_0_12px_rgba(232,160,69,0.2)]
+              text-[#a1a1aa] hover:text-[#e8a045]
+              transition-all flex items-center justify-center
+            "
+          >
+            <BarChart3 size={18} strokeWidth={2.5} />
+          </motion.button>
+        </div>
 
         {confirmState === 'error' && (
           <div className="flex flex-col gap-2">
@@ -576,6 +602,13 @@ export function ProductCard({
         )}
       </div>
       </motion.div>
+      <ExplainDrawer
+        product={product}
+        allProducts={allProducts}
+        isWinner={isWinner}
+        open={showExplain}
+        onClose={() => setShowExplain(false)}
+      />
     </div>
   )
 }

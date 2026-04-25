@@ -47,12 +47,13 @@ function Stars({ isWarping }: { isWarping: boolean }) {
 
   return (
     <group rotation={[0, 0, Math.PI / 4]}>
-      <Points ref={ref} positions={positions} stride={3} frustumCulled={false} depthWrite={false}>
+      <Points ref={ref} positions={positions} stride={3} frustumCulled={false}>
         <PointMaterial
           transparent
           color="#a78bfa"
           size={0.003}
           sizeAttenuation={true}
+          depthWrite={false}
           blending={THREE.AdditiveBlending}
         />
       </Points>
