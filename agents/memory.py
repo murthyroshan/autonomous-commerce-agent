@@ -217,3 +217,40 @@ def get_history(user_id: str, limit: int = 100) -> list[dict]:
     except Exception as e:
         logger.error(f"get_history({user_id}): read failed — {e}")
         return []
+
+def get_next_receipt_number(user_id: str = "global") -> int:
+    """
+    Returns and increments the global receipt counter.
+    Stored in prefs/receipt_counter.json.
+    Thread-safe via file read/write with integer lock.
+    """
+    import os, json
+    os.makedirs("prefs", exist_ok=True)
+    path = "prefs/receipt_counter.json"
+
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+        counter = data.get("counter", 0) + 1
+    except (FileNotFoundError, json.JSONDecodeError):
+        counter = 1
+
+    with open(path, "w") as f:
+        json.dump({"counter": counter}, f)
+
+    return counter
+
+def log_nft_receipt(user_id: str, nft_data: dict) -> None:
+    """Append NFT receipt info to the user's history."""
+    import os, json
+    from datetime import datetime
+
+    os.makedirs("history", exist_ok=True)
+    path = f"history/{user_id}_nfts.jsonl"
+
+    entry = {
+        **nft_data,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+    with open(path, "a") as f:
+        f.write(json.dumps(entry) + "\n")

@@ -340,3 +340,91 @@ def record_purchase_intent(product: dict, user_id: str = "demo") -> dict:
         "tx_id":        tx_id,
         "explorer_url": f"https://lora.algokit.io/testnet/transaction/{tx_id}",
     }
+
+
+def mint_purchase_nft(
+    product: dict,
+    purchase_tx_id: str,
+    receipt_number: int,
+) -> dict:
+    """
+    Mint a Kartiq Purchase Receipt NFT as an Algorand ASA.
+
+    The NFT is a non-fungible ASA (total=1, decimals=0)
+    with metadata encoding the purchase details in the
+    unit name and asset name fields.
+
+    Returns: {
+        "asset_id": int,
+        "asset_url": str,   ← testnet explorer URL
+        "receipt_number": int,
+    }
+    """
+    from algosdk import mnemonic, account, transaction
+    import os, json
+
+    sender_mnemonic = os.getenv("ALGORAND_MNEMONIC")
+    if not sender_mnemonic:
+        raise ValueError("ALGORAND_MNEMONIC not set")
+
+    private_key = mnemonic.to_private_key(sender_mnemonic)
+    sender      = account.address_from_private_key(private_key)
+    client      = _get_client()
+    params      = client.suggested_params()
+
+    # ASA name — max 32 chars
+    asset_name = f"KARTIQ-RECEIPT #{receipt_number:04d}"
+
+    # Unit name — max 8 chars — encodes score
+    score_pct  = round((product.get("score", 0)) * 100)
+    unit_name  = f"KR{score_pct:03d}"
+
+    # Metadata note — encodes full purchase details
+    metadata = {
+        "standard": "arc3",
+        "name":     asset_name,
+        "product":  product.get("title", "")[:60],
+        "price":    product.get("price"),
+        "source":   product.get("source"),
+        "score":    product.get("score"),
+        "tx_id":    purchase_tx_id[:20],
+        "receipt":  receipt_number,
+    }
+
+    txn = transaction.AssetConfigTxn(
+        sender=sender,
+        sp=params,
+        total=1,          # NFT: exactly 1 unit
+        decimals=0,       # NFT: not divisible
+        default_frozen=False,
+        unit_name=unit_name,
+        asset_name=asset_name,
+        manager=sender,
+        reserve=sender,
+        freeze=sender,
+        clawback=sender,
+        note=json.dumps(metadata).encode(),
+        strict_empty_address_check=False,
+    )
+
+    signed = txn.sign(private_key)
+    tx_id  = client.send_transaction(signed)
+
+    # Wait for confirmation and get asset ID
+    from algosdk.transaction import wait_for_confirmation
+    confirmed = wait_for_confirmation(client, tx_id, 4)
+    asset_id  = confirmed.get("asset-index")
+
+    logger.info(
+        f"NFT receipt minted: ASA {asset_id} "
+        f"— Receipt #{receipt_number:04d}"
+    )
+
+    return {
+        "asset_id":       asset_id,
+        "asset_url":      f"https://testnet.explorer.perawallet.app/asset/{asset_id}",
+        "receipt_number": receipt_number,
+        "tx_id":          tx_id,
+        "purchase_tx_id": purchase_tx_id,
+        "product_title":  product.get("title", ""),
+    }
