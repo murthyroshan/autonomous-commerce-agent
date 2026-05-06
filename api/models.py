@@ -74,4 +74,5 @@ class ConfirmResponse(BaseModel):
     explorer_url: Optional[str] = None
     app_id:       Optional[int] = None   # smart contract app id (Phase 5 escrow)
     contract_url: Optional[str] = None  # link to the escrow smart contract
+    nft_url:      Optional[str] = None  # link to the receipt NFT
     error:        Optional[str] = None

@@ -16,6 +16,7 @@ interface ConfirmResponse {
   explorer_url?: string
   app_id?: number       // Algorand smart contract application ID (Phase 5 escrow)
   contract_url?: string // link to the deployed escrow application
+  nft_url?: string      // link to the receipt NFT
   error?: string
 }
 
@@ -88,8 +89,9 @@ export function ProductCard({
   const [txId, setTxId] = useState<string | null>(null)
   const [explorerUrl, setExplorerUrl] = useState<string | null>(null)
   const [contractUrl, setContractUrl] = useState<string | null>(null)
+  const [nftUrl, setNftUrl] = useState<string | null>(null)
 
-  const { address, connected, connect, signTransaction } = usePeraWallet()
+  const { address, connected, connect, signTransaction, disconnect } = usePeraWallet()
 
   type WatchState = 'hidden' | 'input' | 'saved'
   const [watchState, setWatchState] = useState<WatchState>('hidden')
@@ -138,6 +140,7 @@ export function ProductCard({
           setTxId(fallbackData.tx_id)
           setExplorerUrl(fallbackData.explorer_url ?? `https://lora.algokit.io/testnet/transaction/${fallbackData.tx_id}`)
           if (fallbackData.contract_url) setContractUrl(fallbackData.contract_url)
+          if (fallbackData.nft_url) setNftUrl(fallbackData.nft_url)
           setConfirmState('done')
         } else if (fallbackData.success) {
           setConfirmState('local')
@@ -170,6 +173,7 @@ export function ProductCard({
         setTxId(data.tx_id)
         setExplorerUrl(data.explorer_url ?? `https://lora.algokit.io/testnet/transaction/${data.tx_id}`)
         if (data.contract_url) setContractUrl(data.contract_url)
+        if (data.nft_url) setNftUrl(data.nft_url)
         setConfirmState('done')
       } else if (data.tx_id) {
         setTxId(data.tx_id)
@@ -321,9 +325,14 @@ export function ProductCard({
       )}
 
       <div style={{ transform: 'translateZ(50px)' }} className="mt-auto flex flex-col gap-1.5 relative z-20">
-        <p className="text-xl font-bold" style={{ color: '#f5f5f5' }}>
-          ₹{product.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-        </p>
+        <div className="flex flex-col">
+          <p className="text-xl font-bold" style={{ color: '#f5f5f5' }}>
+            ₹{product.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+          </p>
+          <p className="text-[10px] text-zinc-500 leading-tight mt-0.5">
+            Prices fetched via Google Shopping. Live store prices may vary due to variants or sales.
+          </p>
+        </div>
         {product.price_drop_pct != null && product.price_drop_pct > 0 && product.historical_30d_avg != null && (
           <p className="text-xs mt-0.5" style={{ color: '#4ade80' }}>
             ↓{product.price_drop_pct}% from 30-day avg ₹{product.historical_30d_avg.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
@@ -442,8 +451,17 @@ export function ProductCard({
         )}
 
         {confirmState === 'signing' && (
-          <div className="w-full rounded-xl px-4 py-2.5 text-center text-sm" style={{ background: 'rgba(39,39,42,0.6)', color: '#71717a', border: '1px solid #333' }}>
-            <span className="inline-block animate-pulse">Sign in Pera -&gt;</span>
+          <div className="w-full flex gap-2">
+            <div className="flex-1 rounded-xl px-4 py-2.5 text-center text-sm" style={{ background: 'rgba(39,39,42,0.6)', color: '#71717a', border: '1px solid #333' }}>
+              <span className="inline-block animate-pulse">Sign in Pera -&gt;</span>
+            </div>
+            <button 
+              onClick={() => { disconnect(); setConfirmState('idle'); }} 
+              className="rounded-xl px-4 py-2 text-xs font-bold transition-colors"
+              style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}
+            >
+              Cancel
+            </button>
           </div>
         )}
 
@@ -455,6 +473,7 @@ export function ProductCard({
 
         {(confirmState === 'done' || confirmState === 'local') && (
           <div className="flex flex-col gap-2">
+            {/* Status badge */}
             <div
               className="w-full rounded-xl px-4 py-2.5 text-center text-sm font-semibold"
               style={{
@@ -464,7 +483,7 @@ export function ProductCard({
               }}
             >
               {confirmState === 'done'
-                ? contractUrl ? '✓ Signed & Escrow Deployed' : '✓ Signed on Algorand'
+                ? contractUrl ? '✓ Signed & Escrow Deployed' : (nftUrl ? '✓ Signed & NFT Minted' : '✓ Signed on Algorand')
                 : '✓ Purchase noted locally'}
             </div>
 
@@ -474,52 +493,60 @@ export function ProductCard({
               </p>
             )}
 
-            {/* Transaction link */}
-            {txId && explorerUrl && (
+            {/* Primary CTA — NFT Proof */}
+            {nftUrl && (
               <a
-                href={explorerUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-center text-xs transition-colors"
-                style={{ color: '#52525b' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
-                title="View transaction on Algorand Explorer"
-              >
-                TX: {txId.slice(0, 12)}...
-              </a>
-            )}
-
-            {/* Smart contract / escrow link — prominent CTA */}
-            {contractUrl && (
-              <a
-                href={contractUrl}
+                href={nftUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all"
                 style={{
-                  background: 'linear-gradient(135deg, rgba(109,40,217,0.25), rgba(139,92,246,0.15))',
-                  color: '#c4b5fd',
-                  border: '1px solid rgba(139,92,246,0.5)',
-                  boxShadow: '0 0 12px rgba(139,92,246,0.15)',
-                  letterSpacing: '0.01em',
+                  background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(52,211,153,0.1))',
+                  color: '#6ee7b7',
+                  border: '1px solid rgba(52,211,153,0.3)',
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(109,40,217,0.4), rgba(139,92,246,0.25))'
-                  e.currentTarget.style.boxShadow = '0 0 20px rgba(139,92,246,0.3)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(109,40,217,0.25), rgba(139,92,246,0.15))'
-                  e.currentTarget.style.boxShadow = '0 0 12px rgba(139,92,246,0.15)'
-                }}
-                title="View escrow smart contract on Algorand explorer"
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, rgba(16,185,129,0.25), rgba(52,211,153,0.18))' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(52,211,153,0.1))' }}
               >
-                <span style={{ fontSize: '1rem' }}>◈</span>
-                <span>View Smart Contract on Algorand</span>
+                <span>🧾</span>
+                <span>View Proof of Purchase</span>
                 <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>↗</span>
               </a>
             )}
 
+            {/* Secondary: TX + Smart Contract — compact pill row */}
+            {(txId || contractUrl) && (
+              <div className="flex items-center justify-center flex-wrap gap-2 pt-1">
+                {txId && explorerUrl && (
+                  <a
+                    href={explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-mono transition-colors"
+                    style={{ background: 'rgba(255,255,255,0.04)', color: '#52525b', border: '1px solid rgba(255,255,255,0.07)' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = '#a78bfa')}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
+                    title="Algorand transaction"
+                  >
+                    Tx: {txId.slice(0, 8)}… ↗
+                  </a>
+                )}
+                {contractUrl && (
+                  <a
+                    href={contractUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-mono transition-colors"
+                    style={{ background: 'rgba(109,40,217,0.08)', color: '#7c3aed', border: '1px solid rgba(109,40,217,0.2)' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = '#c4b5fd')}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = '#7c3aed')}
+                    title="Escrow smart contract"
+                  >
+                    ◈ Contract ↗
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         )}
 

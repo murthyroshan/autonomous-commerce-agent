@@ -6,7 +6,7 @@ import logging
 import os
 import re
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -211,7 +211,7 @@ async def search_stream(request: Request, query: str, user_id: str = Query(defau
 # ── POST /confirm — log purchase to Algorand (Phase 4+) ──────────────────────
 
 @router.post("/confirm", response_model=ConfirmResponse)
-async def confirm_purchase(request: ConfirmRequest):
+async def confirm_purchase(request: ConfirmRequest, background_tasks: BackgroundTasks):
     """
     Log a confirmed purchase to Algorand testnet and record in local history.
     Phase 4: plain PaymentTxn with note field.
@@ -255,12 +255,29 @@ async def confirm_purchase(request: ConfirmRequest):
     except Exception as e:
         logger.warning(f"log_purchase failed (non-blocking): {e}")
 
+    nft_url = None
+    if tx_id and not tx_id.startswith("local-"):
+        try:
+            from blockchain.algorand import mint_purchase_nft
+            from agents.memory import get_next_receipt_number, log_nft_receipt
+            receipt_number = get_next_receipt_number()
+            nft_result = await asyncio.to_thread(
+                mint_purchase_nft,
+                request.model_dump(), tx_id, receipt_number
+            )
+            log_nft_receipt(request.user_id or "demo", nft_result)
+            nft_url = nft_result.get("asset_url")
+            logger.info(f"NFT receipt #{receipt_number:04d} minted: ASA {nft_result['asset_id']}")
+        except Exception as e:
+            logger.error(f"NFT mint failed (non-critical): {e}")
+
     return ConfirmResponse(
         success=True,
         tx_id=tx_id,
         explorer_url=explorer_url,
         app_id=app_id,
         contract_url=contract_url,
+        nft_url=nft_url,
         error=confirm_error,
     )
 
@@ -335,11 +352,28 @@ async def submit_transaction(request: ConfirmRequest):
             app_id,
             "locked" if app_id else None,
         )
+        nft_url = None
+        if tx_id and not tx_id.startswith("local-"):
+            try:
+                from blockchain.algorand import mint_purchase_nft
+                from agents.memory import get_next_receipt_number, log_nft_receipt
+                receipt_number = get_next_receipt_number()
+                nft_result = await asyncio.to_thread(
+                    mint_purchase_nft,
+                    request.model_dump(), tx_id, receipt_number
+                )
+                log_nft_receipt(request.user_id or "demo", nft_result)
+                nft_url = nft_result.get("asset_url")
+            except Exception as e:
+                logger.error(f"NFT mint failed: {e}")
+
         response: dict = {"success": True, **result}
         if contract_url:
             response["contract_url"] = contract_url
         if app_id:
             response["app_id"] = app_id
+        if nft_url:
+            response["nft_url"] = nft_url
         return response
     except Exception as e:
         logger.error(f"submit_transaction error: {e}")
@@ -404,6 +438,17 @@ async def get_purchase_history(
     except Exception as e:
         logger.error(f"get_history error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/nfts")
+async def get_nft_receipts(user_id: str = "demo"):
+    import os, json
+    path = f"history/{user_id}_nfts.jsonl"
+    if not os.path.exists(path):
+        return {"nfts": []}
+    with open(path) as f:
+        nfts = [json.loads(line)
+                for line in f if line.strip()]
+    return {"nfts": list(reversed(nfts))}
 
 
 # ── POST /api/prefs — update a preference key ────────────────────────────────
