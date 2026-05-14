@@ -334,7 +334,7 @@ export function Navbar() {
               <Magnetic intensity={0.2}>
                 <button
                   onClick={disconnect}
-                  className="group/disconnect relative flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-900/50 text-zinc-400 outline outline-1 outline-white/5 transition-all hover:bg-red-500/10 hover:text-red-400 hover:outline-red-500/20"
+                  className="group/disconnect relative flex h-[44px] w-[44px] items-center justify-center rounded-xl bg-zinc-900/50 text-zinc-400 outline outline-1 outline-white/5 transition-all hover:bg-red-500/10 hover:text-red-400 hover:outline-red-500/20"
                   title="Disconnect Wallet"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover/disconnect:rotate-90">

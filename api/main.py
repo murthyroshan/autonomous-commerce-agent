@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import router
+from .routes import router, _limiter, _rate_limiting_available
 
 load_dotenv()
 
@@ -18,9 +18,20 @@ logging.basicConfig(
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start background services on startup, clean up on shutdown."""
+    # Security: warn early if critical env vars are absent
+    required = ["SERPER_API_KEY", "GROQ_API_KEY"]
+    missing = [k for k in required if not os.getenv(k)]
+    if missing:
+        logger.warning(
+            f"Missing env vars: {missing}. "
+            f"Running in degraded mode."
+        )
     from api.watchlist_jobs import start_watchlist_scheduler
     start_watchlist_scheduler()
     yield  # app is running
@@ -34,15 +45,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+ALLOWED_ORIGINS = [
+    os.getenv("FRONTEND_ORIGIN", "http://localhost:3000"),
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+]
+# Only add production URL if explicitly configured
+_prod_url = os.getenv("PRODUCTION_URL")
+if _prod_url:
+    ALLOWED_ORIGINS.append(_prod_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        os.getenv("FRONTEND_ORIGIN", "http://localhost:3000"),
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -62,6 +78,13 @@ async def api_key_guard(request: Request, call_next):
     return await call_next(request)
 
 app.include_router(router, prefix="/api")
+
+# Register slowapi rate-limit handler (returns HTTP 429 with JSON body)
+if _rate_limiting_available and _limiter is not None:
+    from slowapi import _rate_limit_exceeded_handler
+    from slowapi.errors import RateLimitExceeded
+    app.state.limiter = _limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.get("/")

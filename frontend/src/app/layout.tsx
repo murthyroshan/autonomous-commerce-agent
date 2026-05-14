@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { Navbar } from '@/components/Navbar'
-import { CustomCursor } from '@/components/CustomCursor'
+import { LayoutShell } from '@/components/LayoutShell'
 
 const inter = Inter({
   variable: '--font-inter',
@@ -19,7 +18,7 @@ export const metadata: Metadata = {
   },
 }
 
-import { TerrainBackground } from '@/components/TerrainBackground'
+import { PageTransition } from '@/components/PageTransition'
 
 export default function RootLayout({
   children,
@@ -27,10 +26,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} min-h-screen scroll-smooth`} suppressHydrationWarning>
       <body className="flex flex-col min-h-screen antialiased bg-[#0a0a0a] gradient-bg overflow-x-hidden relative">
-        <TerrainBackground />
-        <CustomCursor />
-        <Navbar />
-        {children}
+        <LayoutShell>
+          <PageTransition>
+            {children}
+          </PageTransition>
+        </LayoutShell>
       </body>
     </html>
   )

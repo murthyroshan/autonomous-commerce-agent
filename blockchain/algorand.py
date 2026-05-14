@@ -22,12 +22,31 @@ def _get_client():
     return algod.AlgodClient(ALGOD_TOKEN, ALGOD_ADDRESS)
 
 
+def _get_private_key() -> str:
+    """Retrieve and validate the Algorand private key from ALGORAND_MNEMONIC.
+
+    Raises ValueError if the env var is missing or the mnemonic is not
+    exactly 25 words (catches common copy-paste truncation errors).
+    """
+    mnemonic_str = os.getenv("ALGORAND_MNEMONIC")
+    if not mnemonic_str:
+        raise ValueError(
+            "ALGORAND_MNEMONIC not configured. "
+            "Cannot sign transactions."
+        )
+    words = mnemonic_str.strip().split()
+    if len(words) != 25:
+        raise ValueError(
+            f"Invalid mnemonic: expected 25 words, "
+            f"got {len(words)}"
+        )
+    from algosdk import mnemonic as algo_mnemonic
+    return algo_mnemonic.to_private_key(mnemonic_str)
+
+
 def _get_private_key_and_address():
-    from algosdk import account, mnemonic
-    sender_mnemonic = os.getenv("ALGORAND_MNEMONIC")
-    if not sender_mnemonic:
-        raise ValueError("ALGORAND_MNEMONIC not set.")
-    private_key = mnemonic.to_private_key(sender_mnemonic)
+    from algosdk import account
+    private_key = _get_private_key()
     address = account.address_from_private_key(private_key)
     return private_key, address
 
@@ -360,14 +379,10 @@ def mint_purchase_nft(
         "receipt_number": int,
     }
     """
-    from algosdk import mnemonic, account, transaction
-    import os, json
+    from algosdk import account, transaction
+    import json
 
-    sender_mnemonic = os.getenv("ALGORAND_MNEMONIC")
-    if not sender_mnemonic:
-        raise ValueError("ALGORAND_MNEMONIC not set")
-
-    private_key = mnemonic.to_private_key(sender_mnemonic)
+    private_key = _get_private_key()
     sender      = account.address_from_private_key(private_key)
     client      = _get_client()
     params      = client.suggested_params()

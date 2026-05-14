@@ -11,6 +11,20 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 
+try:
+    from slowapi import Limiter
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+    _limiter = Limiter(key_func=get_remote_address)
+    _RATE_LIMIT = "15/minute"
+    _rate_limiting_available = True
+except ImportError:
+    _rate_limiting_available = False
+    _limiter = None
+    _RATE_LIMIT = None
+    logger_init = logging.getLogger(__name__)
+    logger_init.warning("slowapi not installed — rate limiting disabled. Run: pip install slowapi")
+
 from agents.pipeline import run_pipeline
 from agents.state import initial_state
 from agents.search_agent import search_agent
@@ -21,6 +35,20 @@ from .models import SearchRequest, SearchResponse, ConfirmRequest, ConfirmRespon
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Attach limiter to router state so FastAPI can find it
+if _rate_limiting_available and _limiter is not None:
+    router.state = type("State", (), {"limiter": _limiter})()
+
+
+def _rate_limit(limit: str):
+    """Return a slowapi limit decorator if available, else a no-op."""
+    if _rate_limiting_available and _limiter is not None:
+        return _limiter.limit(limit)
+    # No-op decorator when slowapi is absent
+    def _noop(fn):
+        return fn
+    return _noop
 
 
 # ── Health check ──────────────────────────────────────────────────────────────
@@ -33,10 +61,11 @@ async def health():
 # ── POST /search — full pipeline, single response ────────────────────────────
 
 @router.post("/search", response_model=SearchResponse)
-async def search(request: SearchRequest, user_id: str = Query(default="demo")):
+@_rate_limit("15/minute")
+async def search(request: SearchRequest, http_request: Request, user_id: str = Query(default="demo")):
     """
     Run the full agent pipeline and return the complete result.
-    Use this for non-streaming clients.
+    Use this for non-streaming clients. Rate limited: 15 req/min per IP.
     """
     try:
         result = await asyncio.to_thread(run_pipeline, request.query, user_id)
@@ -57,6 +86,7 @@ async def search(request: SearchRequest, user_id: str = Query(default="demo")):
 # ── GET /search/stream — SSE streaming endpoint ───────────────────────────────
 
 @router.get("/search/stream")
+@_rate_limit("15/minute")
 async def search_stream(request: Request, query: str, user_id: str = Query(default="demo")):
     """
     Run the pipeline step-by-step, streaming status updates via SSE.
