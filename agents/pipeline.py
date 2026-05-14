@@ -15,6 +15,7 @@ The public interface is always:
 import logging
 import re
 import json
+import time
 import concurrent.futures
 
 from .state import AgentState, initial_state
@@ -170,6 +171,7 @@ def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
 
     query = query.strip()
     state = initial_state(query)
+    pipeline_start = time.time()
     logger.info(f"Pipeline started for query: '{query}' user_id='{user_id}'")
 
     intent = _parse_user_intent(query)
@@ -240,6 +242,10 @@ def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
             state["battle_contenders"] = [contender_a, contender_b]
             # Run decision agent to get justification + battle_report
             state.update(decision_agent(state))
+            duration = time.time() - pipeline_start
+            logger.info(f"Pipeline completed in {duration:.2f}s (VS mode)")
+            if duration > 8:
+                logger.warning(f"Pipeline exceeded 8s target ({duration:.2f}s) — SSE messages are critical")
             logger.info(
                 f"VS pipeline complete. Contenders: "
                 f"'{contender_a.get('title', '?')}' vs '{contender_b.get('title', '?')}'"
@@ -277,6 +283,10 @@ def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
 
     # Agent 3: Decision (will also generate battle_report if contenders are set)
     state.update(decision_agent(state))
+    duration = time.time() - pipeline_start
+    logger.info(f"Pipeline completed in {duration:.2f}s")
+    if duration > 8:
+        logger.warning(f"Pipeline exceeded 8s target ({duration:.2f}s) — verify SSE messages are firing at each agent transition")
     logger.info(
         f"Pipeline complete. "
         f"Recommendation: '{state['recommendation'].get('title', 'N/A')}'"

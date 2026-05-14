@@ -15,6 +15,7 @@ Data quality layer (applied to Serper results):
 import os
 import re
 import json
+import time
 import logging
 import requests
 
@@ -28,6 +29,39 @@ logger = logging.getLogger(__name__)
 
 SERPER_ENDPOINT = "https://google.serper.dev/shopping"
 _groq_client = None  # lazily created on first use
+
+# ── In-process search result cache (TTL = 1 hour) ────────────────────────────
+_CACHE_TTL_SECONDS = 3600  # 1 hour
+_search_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _cache_get(key: str) -> dict | None:
+    """Return cached result if still within TTL, else None."""
+    entry = _search_cache.get(key)
+    if entry is None:
+        return None
+    cached_at, value = entry
+    if time.time() - cached_at > _CACHE_TTL_SECONDS:
+        del _search_cache[key]
+        return None
+    return value
+
+
+def _cache_set(key: str, value: dict) -> None:
+    """Store result in cache with current timestamp."""
+    _search_cache[key] = (time.time(), value)
+
+
+def prewarm_cache(queries: list[str]) -> None:
+    """Run search_agent for each query to populate the cache before demo."""
+    for q in queries:
+        state: AgentState = {"query": q, "search_results": [], "scored_products": [],
+                             "recommendation": {}, "error": None, "category": None,
+                             "budget_miss": None, "battle_contenders": None,
+                             "battle_report": None}
+        logger.info(f"Pre-warming cache for query: '{q}'")
+        search_agent(state)
+        logger.info(f"Cache pre-warm complete for: '{q}'") 
 
 
 def _get_groq_client() -> Groq:
@@ -511,14 +545,18 @@ def _parse_serper_response(
 
         # Fix broken 'ibp=oshop' links by routing directly to the storefront
         raw_link = item.get("link", "#")
-        if "ibp=oshop" in raw_link or "google.com" in raw_link:
+        source_lower = item.get("source", "").lower()
+
+        # Catch generic category pages from Cashify (e.g., /find-new-smart-tv)
+        is_generic_cashify = "cashify" in source_lower and ("find-new" in raw_link or raw_link.endswith("buy-refurbished-mobile-phones"))
+
+        if "ibp=oshop" in raw_link or "google.com" in raw_link or is_generic_cashify:
             import urllib.parse
             # Use a concise search term (not the full verbose title)
             search_term = _safe_search_term(title, max_words=5)
             safe_title  = urllib.parse.quote_plus(title)        # full title for Amazon/Flipkart
             # Use percent-encoding (%20) instead of + for stores that break on +
             safe_short  = urllib.parse.quote(search_term)       
-            source_lower = item.get("source", "").lower()
 
             if "amazon" in source_lower:
                 raw_link = f"https://www.amazon.in/s?k={safe_title}"
@@ -536,6 +574,9 @@ def _parse_serper_response(
                 raw_link = f"https://duckduckgo.com/?q=%21ducky+{safe_title}+{safe_source}"
             elif "tata cliq" in source_lower:
                 raw_link = f"https://www.tatacliq.com/search/?searchCategory=all&text={safe_short}"
+            elif "cashify" in source_lower:
+                # Force DuckDuckGo to find the exact product page on Cashify
+                raw_link = f"https://duckduckgo.com/?q=%21ducky+{safe_title}+site%3Acashify.in"
             else:
                 # Fallback: DuckDuckGo I'm Feeling Lucky — use short term for cleaner redirect
                 safe_source = urllib.parse.quote_plus(item.get("source", ""))
@@ -651,6 +692,9 @@ def search_agent(state: AgentState) -> dict:
     Falls through Serper → Groq → Mock on failure.
     Always returns {"search_results": [...]} with optional "error" key.
 
+    Caching: Results are cached in-process for 1 hour (TTL=3600s).
+    Cache HITs are logged as "Cache HIT for query: X".
+
     Smart Budget Negotiation (Feature 2):
         If no products are found within the extracted budget, the agent
         performs a second uncapped search, picks the closest product
@@ -661,12 +705,20 @@ def search_agent(state: AgentState) -> dict:
     budget   = _extract_budget(query)
     category = state.get("category") or _detect_category(query)
 
+    # ── Cache check ──────────────────────────────────────────────────────────
+    mock_only = os.getenv("MOCK_ONLY", "false").lower() == "true"
+    cache_key = f"{query}::{mock_only}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        logger.info(f"Cache HIT for query: {query}")
+        return cached
+
     if budget:
         logger.info(f"Budget detected: ₹{budget:,.0f}")
     logger.info(f"Category detected: {category}")
 
     # Honour MOCK_ONLY flag (useful for tests and offline dev)
-    if os.getenv("MOCK_ONLY", "false").lower() == "true":
+    if mock_only:
         logger.info("MOCK_ONLY=true — skipping live search")
         mock_results = get_mock_products(query)
         if budget:
@@ -674,7 +726,9 @@ def search_agent(state: AgentState) -> dict:
         error = "Mock mode — MOCK_ONLY=true"
         if len(mock_results) < 3:
             error = f"Limited results for this budget — showing {len(mock_results)} product(s)"
-        return {"search_results": mock_results, "error": error}
+        result = {"search_results": mock_results, "error": error}
+        _cache_set(cache_key, result)
+        return result
 
     def _do_search(max_price: float | None) -> tuple[list[dict], bool]:
         """Run the full Serper → Groq → Mock waterfall with the given cap.
@@ -765,6 +819,7 @@ def search_agent(state: AgentState) -> dict:
             out["error"] = "Live search unavailable — showing sample data"
         elif len(results) < 3:
             out["error"] = f"Limited results for this budget — showing {len(results)} product(s)"
+        _cache_set(cache_key, out)
         return out
 
     # ── Smart Budget Negotiation (Feature 2) ────────────────────────────────
@@ -796,20 +851,24 @@ def search_agent(state: AgentState) -> dict:
                 ),
             }
             logger.info(
-                f"Budget miss: closest is '\'{ closest['title']}\'' at ₹{closest['price']:,.0f}"
+                f"Budget miss: closest is '\'{ closest['title']}\'' at \u20b9{closest['price']:,.0f}"
             )
-            return {
+            result = {
                 "search_results": [],
                 "budget_miss": budget_miss,
                 "error": budget_miss["message"],
             }
+            _cache_set(cache_key, result)
+            return result
 
     # ── Absolute fallback: return whatever mock data we have ────────────────
     logger.info(f"Using mock data for query: '{query}'")
     mock_results = get_mock_products(query)
     if budget:
         mock_results = [p for p in mock_results if p["price"] <= budget]
-    return {
+    result = {
         "search_results": mock_results,
         "error": "Live search unavailable — showing sample data",
     }
+    _cache_set(cache_key, result)
+    return result

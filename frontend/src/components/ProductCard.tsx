@@ -5,8 +5,15 @@ import type { ScoredProduct } from '@/hooks/useAgentStream'
 import { motion, useMotionValue, useSpring, useTransform, useMotionTemplate } from 'framer-motion'
 import { usePeraWallet } from '@/hooks/usePeraWallet'
 import { SocialProofPanel } from '@/components/SocialProofPanel'
-import { ExplainDrawer } from './product/ExplainDrawer'
+import dynamic from 'next/dynamic'
+import { ShareButton } from '@/components/product/ShareButton'
 import { BarChart3 } from 'lucide-react'
+
+// Heavy drawer — load only when user opens it (not on initial card render)
+const ExplainDrawer = dynamic(
+  () => import('./product/ExplainDrawer').then((m) => ({ default: m.ExplainDrawer })),
+  { ssr: false }
+)
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -306,7 +313,7 @@ export function ProductCard({
         )}
       </div>
 
-      <h3 style={{ transform: 'translateZ(40px)' }} className="mb-1 line-clamp-2 text-xl font-bold leading-snug text-[#f5f5f5] relative z-20">
+      <h3 style={{ transform: 'translateZ(40px)' }} className="mb-1 line-clamp-2 text-xl font-bold leading-snug text-[#f5f5f5] relative z-20 break-words font-display">
         {product.title}
       </h3>
 
@@ -326,7 +333,7 @@ export function ProductCard({
 
       <div style={{ transform: 'translateZ(50px)' }} className="mt-auto flex flex-col gap-1.5 relative z-20">
         <div className="flex flex-col">
-          <p className="text-xl font-bold" style={{ color: '#f5f5f5' }}>
+          <p className="text-xl font-bold font-mono" style={{ color: '#f5f5f5' }}>
             ₹{product.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </p>
           <p className="text-[10px] text-zinc-500 leading-tight mt-0.5">
@@ -528,7 +535,7 @@ export function ProductCard({
                     onMouseLeave={(e) => (e.currentTarget.style.color = '#52525b')}
                     title="Algorand transaction"
                   >
-                    Tx: {txId.slice(0, 8)}… ↗
+                    Tx: {txId.length > 16 ? `${txId.slice(0, 16)}...` : txId} ↗
                   </a>
                 )}
                 {contractUrl && (
@@ -598,7 +605,7 @@ export function ProductCard({
             onClick={() => setShowExplain(true)}
             title="Score Breakdown"
             className="
-              w-10 h-10 rounded-xl flex-shrink-0
+              w-[44px] h-[44px] rounded-xl flex-shrink-0
               border border-[rgba(255,255,255,0.1)]
               bg-gradient-to-br from-[rgba(255,255,255,0.05)] to-[rgba(255,255,255,0.01)]
               hover:border-[rgba(232,160,69,0.4)]
@@ -610,6 +617,18 @@ export function ProductCard({
           >
             <BarChart3 size={18} strokeWidth={2.5} />
           </motion.button>
+
+          {isWinner && (
+            <ShareButton
+              query={product.title}
+              recommendation={{
+                ...product,
+                justification: justification || '',
+                community_sentiment: communitySentiment,
+              }}
+              totalCompared={allProducts.length || 1}
+            />
+          )}
         </div>
 
         {confirmState === 'error' && (

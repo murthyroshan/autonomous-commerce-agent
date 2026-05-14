@@ -2,13 +2,29 @@
 
 import { Suspense, useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { useAgentStream, type BudgetMiss } from '@/hooks/useAgentStream'
-import { ChatFlow } from '@/components/ChatFlow'
 import { StatusTicker } from '@/components/StatusTicker'
 import { ErrorBanner } from '@/components/ErrorBanner'
-import { ProductGrid } from '@/components/ProductGrid'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BattleArena } from '@/components/BattleArena'
+import { ShareButton } from '@/components/product/ShareButton'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
+
+// Dynamic imports — these are heavy and not needed on initial paint
+const ChatFlow = dynamic(
+  () => import('@/components/ChatFlow').then((m) => ({ default: m.ChatFlow })),
+  { ssr: false, loading: () => <div className="h-16 w-full max-w-2xl rounded-full bg-white/5 animate-pulse" /> }
+)
+
+const BattleArena = dynamic(
+  () => import('@/components/BattleArena').then((m) => ({ default: m.BattleArena })),
+  { ssr: false }
+)
+
+const ProductGrid = dynamic(
+  () => import('@/components/ProductGrid').then((m) => ({ default: m.ProductGrid })),
+  { ssr: false }
+)
 
 function SearchContent() {
   const [query, setQuery] = useState<string | null>(null)
@@ -26,6 +42,15 @@ function SearchContent() {
 
   // Reset dismissed state whenever a new query fires
   useEffect(() => { setDismissedBudgetMiss(false) }, [query])
+
+  // Scroll to results when they arrive
+  useEffect(() => {
+    if (result?.scored_products && result.scored_products.length > 0) {
+      setTimeout(() => {
+        document.getElementById('results-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
+    }
+  }, [result?.scored_products])
 
   // Battle Arena data
   const battleContenders = result?.battle_contenders ?? null
@@ -85,11 +110,15 @@ function SearchContent() {
         </motion.p>
 
         {/* Chat flow for search & clarification */}
-        <ChatFlow onSearch={setQuery} disabled={loading} initialQuery={initialQ} />
+        <ErrorBoundary>
+          <ChatFlow onSearch={setQuery} disabled={loading} initialQuery={initialQ} />
+        </ErrorBoundary>
 
         {/* Status + error */}
         <div className="mt-5 flex w-full max-w-2xl flex-col items-center gap-3">
-          <StatusTicker status={status} loading={loading} />
+          <ErrorBoundary>
+            <StatusTicker status={status} loading={loading} />
+          </ErrorBoundary>
           <ErrorBanner error={displayError} />
         </div>
       </section>
@@ -186,23 +215,64 @@ function SearchContent() {
 
       {/* ── Results ──────────────────────────────────────────────────── */}
       {result?.scored_products && result.scored_products.length > 0 && (
-        <section className="flex-1 px-4 pb-20 pt-6 max-w-7xl mx-auto w-full">
+        <section id="results-section" className="flex-1 px-4 pb-20 pt-6 max-w-7xl mx-auto w-full">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-xl font-bold">Results</h2>
+              <p className="text-sm text-zinc-400">
+                Compared {result.recommendation?.total_compared ?? result.scored_products?.length ?? 0} products for "{query}"
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {(result.recommendation || result.scored_products?.[0]) && (
+                <ShareButton
+                  query={query || ''}
+                  recommendation={result.recommendation || result.scored_products[0]}
+                  totalCompared={
+                    result.recommendation?.total_compared ?? result.scored_products?.length ?? 0
+                  }
+                />
+              )}
+              <button
+                onClick={() => setQuery(null)}
+                className="text-sm text-zinc-400 hover:text-white transition-colors"
+              >
+                ← New search
+              </button>
+            </div>
+          </div>
+
           {/* Battle Arena — always shown when we have 2+ contenders */}
           {battleContenders && battleContenders.length === 2 && (
-            <BattleArena
-              contenders={battleContenders}
-              battleReport={battleReport}
-              winner={battleWinner}
-            />
+            <ErrorBoundary>
+              <BattleArena
+                contenders={battleContenders}
+                battleReport={battleReport}
+                winner={battleWinner}
+              />
+            </ErrorBoundary>
           )}
 
           {/* Remaining product grid (contenders already excluded) */}
           {gridProducts.length > 0 && (
-            <ProductGrid
-              products={gridProducts}
-              recommendation={result.recommendation}
-            />
+            <ErrorBoundary>
+              <ProductGrid
+                products={gridProducts}
+                recommendation={result.recommendation}
+              />
+            </ErrorBoundary>
           )}
+        </section>
+      )}
+
+      {/* ── No Results Found ─────────────────────────────────────────────────── */}
+      {result?.scored_products && result.scored_products.length === 0 && !loading && (
+        <section id="results-section" className="flex-1 px-4 pb-20 pt-20 max-w-7xl mx-auto w-full text-center">
+           <p className="text-2xl font-bold mb-3 font-display">No products found</p>
+           <p className="text-zinc-400 mb-8 max-w-md mx-auto">We couldn't find any products matching your query. Try broadening your search or checking for typos.</p>
+           <button onClick={() => setQuery(null)} className="px-6 py-3 bg-purple-600 rounded-xl font-bold hover:bg-purple-500 transition-colors">
+              Try another search
+           </button>
         </section>
       )}
 

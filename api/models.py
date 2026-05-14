@@ -1,5 +1,6 @@
 """api/models.py — Pydantic models for request/response validation."""
 
+import re
 from pydantic import BaseModel, field_validator, Field
 from typing import Optional
 
@@ -9,12 +10,16 @@ class SearchRequest(BaseModel):
 
     @field_validator("query")
     @classmethod
-    def query_must_be_non_empty(cls, v: str) -> str:
+    def sanitize_query(cls, v: str) -> str:
+        """Strip whitespace, enforce length limits, and remove HTML/script injection attempts."""
         v = v.strip()
         if not v:
             raise ValueError("Query cannot be empty")
         if len(v) > 200:
-            raise ValueError("Query too long (max 200 characters)")
+            raise ValueError("Query too long")
+        # Remove any HTML/script injection attempts
+        v = re.sub(r'<[^>]+>', '', v)
+        v = re.sub(r'[<>"\']', '', v)
         return v
 
 
