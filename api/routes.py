@@ -8,7 +8,7 @@ import re
 
 from fastapi import APIRouter, HTTPException, Query, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 try:
@@ -496,6 +496,7 @@ async def refund_escrow_route(req: EscrowActionRequest):
 @router.get("/history")
 @_rate_limit("30/minute")
 async def get_purchase_history(
+    request: Request,
     user_id: str = Query(default="demo"),
     limit: int = Query(default=20, ge=1, le=100),
 ):
@@ -510,7 +511,7 @@ async def get_purchase_history(
 
 @router.get("/nfts")
 @_rate_limit("30/minute")
-async def get_nft_receipts(user_id: str = "demo"):
+async def get_nft_receipts(request: Request, user_id: str = Query(default="demo")):
     import os, json
     path = f"history/{_safe_user_id(user_id)}_nfts.jsonl"
     if not os.path.exists(path):
@@ -531,7 +532,7 @@ class PrefsRequest(BaseModel):
 
 @router.post("/prefs")
 @_rate_limit("20/minute")
-async def update_prefs(req: PrefsRequest):
+async def update_prefs(request: Request, req: PrefsRequest):
     """
     Set a preference key for user_id.
     If value is a comma-separated string and the key holds a list,
@@ -600,7 +601,7 @@ def _parse_rule(rule: str) -> dict:
 
 @router.post("/prefs/rule")
 @_rate_limit("20/minute")
-async def add_preference_rule(req: RuleRequest):
+async def add_preference_rule(request: Request, req: RuleRequest):
     """
     Parse a natural-language rule and save it to user preferences.
     Returns the interpreted action so the frontend can confirm it.
@@ -678,7 +679,7 @@ async def watchlist_add(req: WatchlistAddRequest):
 
 @router.get("/watchlist")
 @_rate_limit("30/minute")
-async def watchlist_get(user_id: str = Query(default="demo")):
+async def watchlist_get(request: Request, user_id: str = Query(default="demo")):
     """Return the full watchlist for user_id."""
     from agents.watchlist import get_watchlist
     try:
@@ -707,6 +708,7 @@ async def watchlist_remove(req: WatchlistRemoveRequest):
 @router.get("/social-proof")
 @_rate_limit("30/minute")
 async def social_proof_endpoint(
+    request: Request,
     title: str = Query(..., max_length=500),
     query: str = Query(default="", max_length=200),
 ):
@@ -744,7 +746,7 @@ class EnrichRequest(BaseModel):
 
 @router.post("/clarify")
 @_rate_limit("20/minute")
-async def clarify_query(req: ClarifyRequest):
+async def clarify_query(request: Request, req: ClarifyRequest):
     """
     Determine if a query is too vague.
     If so, return 1-3 clarifying questions.
@@ -764,7 +766,7 @@ async def clarify_query(req: ClarifyRequest):
 
 @router.post("/enrich")
 @_rate_limit("20/minute")
-async def enrich_query(req: EnrichRequest):
+async def enrich_query(request: Request, req: EnrichRequest):
     """
     Combine original vague query + users answers into a refined search query.
     """
