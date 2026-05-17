@@ -336,12 +336,26 @@ def _affix_exclusion_check(query: str, products: list[dict]) -> list[dict]:
     valid_products = []
     query_lower = query.lower()
     
-    # Provide immunity to price integers so they aren't mistaken as model tokens (e.g. '4000')
-    query_no_price = re.sub(r'(under|below|less than|max|budget|rs\.?|₹)\s*[\d,]+\s*k?\b', '', query_lower)
-    query_no_price = re.sub(r'\b[\d,]+\s*k?\s*(?:mein|me\b|rupay|rupee)', '', query_no_price)
+    # Strip price/spec integers before extracting model tokens.
+    # Rule: any standalone number > 999 is a price or spec, not a model token.
+    # Rule: any number with a k suffix (e.g. 20k, 30K) is a price.
+    query_no_price = re.sub(
+        r'(under|below|less\s+than|max|budget|rs\.?|₹|upto|up\s+to|within|around|for)\s*'
+        r'[\d,]+\s*(k|thousand)?\b',
+        '', query_lower, flags=re.IGNORECASE
+    )
+    query_no_price = re.sub(r'\b[\d,]+\s*(k)?\s*(?:mein|me\b|rupay|rupee)\b', '', query_no_price)
+    # Remove all standalone large numbers (>999) — these are always prices/specs
+    query_no_price = re.sub(r'\b\d{4,}\b', '', query_no_price)
+    # Remove k-suffixed numbers (30k, 20K)
+    query_no_price = re.sub(r'\b\d+[kK]\b', '', query_no_price)
 
     # Extract structural model tokens (e.g. '13', 'm3', 's24') from the normalized query
     model_tokens = re.findall(r'\b[a-z]*[0-9]+[a-z]*\b', query_no_price)
+
+    # No model tokens = generic query; affix filtering would only lose results
+    if not model_tokens:
+        return products
     
     for p in products:
         title_lower = p.get('title', '').lower()
@@ -371,12 +385,25 @@ def _affix_exclusion_check(query: str, products: list[dict]) -> list[dict]:
                     break
             
             # Reject if token has separated generic suffix (e.g. '13 Pro')
-            variant_words = ['pro', 'max', 'ultra', 'plus', 'fe', 'lite', 'se', 'r', 'mini', 'air', 'studio', 'active']
+            variant_words = [
+                'pro', 'max', 'ultra', 'plus', 'fe', 'lite', 'se', 'r',
+                'mini', 'air', 'studio', 'active', 'neo', 'edge', 'turbo',
+            ]
+            # Normalize the query to catch symbol equivalents (+ → plus, & → and)
+            query_normalized = (
+                query_lower
+                .replace('+', ' plus')
+                .replace('&', ' and')
+            )
             for var in variant_words:
                 sep_pattern = rf'\b{re.escape(token)}\s+{var}\b'
                 if re.search(sep_pattern, title_lower):
-                    # Do NOT filter if the variant word is present in the original query
-                    if not re.search(sep_pattern, query_lower) and var not in query_lower:
+                    # Only filter if this variant is genuinely absent from the query
+                    var_in_query = (
+                        re.search(sep_pattern, query_normalized) is not None
+                        or var in query_normalized.split()
+                    )
+                    if not var_in_query:
                         logger.info(f"Filtered out variant word: '{var}' in '{title_lower}'")
                         is_valid = False
                         break
@@ -392,7 +419,15 @@ def _affix_exclusion_check(query: str, products: list[dict]) -> list[dict]:
 
         if is_valid:
             valid_products.append(p)
-            
+
+    # Safety net: if the filter removed ALL results, return unfiltered rather
+    # than letting the pipeline see an empty list and fall through to mock data.
+    if not valid_products and products:
+        logger.warning(
+            f"_affix_exclusion_check filtered ALL {len(products)} products "
+            f"for query '{query}' — returning unfiltered to avoid empty results"
+        )
+        return products
     return valid_products
 
 
@@ -467,31 +502,34 @@ def _enrich_query(query: str, category: str = "default") -> str:
     category noun — the model name is already precise enough and adding
     'smartwatch' can dilute the signal.
     For generic queries (e.g. 'gaming laptop'), injects the category noun
-    to prevent cross-category contamination.
+    to prevent cross-category contamination.  The noun is only appended if
+    NONE of its component words already appear in the query — this prevents
+    duplicates like "smartwatch under 5000 smartwatch buy online India".
     """
-    q = query.lower()
-    # Already has platform or site context — leave as-is
+    q = query.lower().strip()
+
+    # Already platform-targeted — leave alone
     if any(w in q for w in ['amazon', 'flipkart', 'site:']):
         return query
 
-    # Specific model query: skip category noun, just add buy-intent
+    # For specific-model queries, skip category noun entirely —
+    # the model name is more precise than any generic noun
     if _is_specific_model_query(query):
-        if any(w in q for w in ['india', 'indian', 'inr', '₹']):
-            return f"{query} buy online"
-        return f"{query} buy online India price"
-
-    # Generic query: inject category noun to pin product type
-    cat_noun = _CATEGORY_QUERY_NOUN.get(category, "")
-    if cat_noun and cat_noun not in q:
-        enriched = f"{query} {cat_noun}"
+        base = query
     else:
-        enriched = query
+        cat_noun = _CATEGORY_QUERY_NOUN.get(category, "")
+        # Only append cat_noun if none of its words already appear in query
+        noun_words = cat_noun.split()
+        already_present = all(w in q for w in noun_words) if noun_words else True
+        if cat_noun and not already_present:
+            base = f"{query} {cat_noun}"
+        else:
+            base = query
 
-    # Already has India context — just add buy-intent
+    # Add India buy-intent suffix — but only once
     if any(w in q for w in ['india', 'indian', 'inr', '₹']):
-        return f"{enriched} buy online"
-    # Generic: add India + buy-intent
-    return f"{enriched} buy online India"
+        return f"{base} buy online"
+    return f"{base} buy online India"
 
 
 def _broaden_query(query: str) -> str:
@@ -708,14 +746,21 @@ def _call_serper(
     raw = r.json()
     results = _parse_serper_response(raw, query=query, max_price=max_price, category=category)
 
-    # Quality gate: if enough rated results exist, drop zero-signal products
-    # (no rating AND no reviews) — they're usually irrelevant or spare-part listings.
+    # Soft quality gate: only drop zero-signal products when there are enough
+    # rated results AND rated results constitute at least 60% of the total.
+    # This prevents niche categories from losing their only valid listings.
     rated = [p for p in results if p["rating"] > 0 or p["review_count"] > 0]
-    if len(rated) >= 5:
-        dropped = len(results) - len(rated)
-        if dropped:
-            logger.info(f"Quality gate: dropped {dropped} zero-signal products")
+    unrated = [p for p in results if p not in rated]
+
+    if len(rated) >= 5 and len(rated) >= len(results) * 0.6:
+        if unrated:
+            logger.info(
+                f"Quality gate: dropped {len(unrated)} zero-signal products "
+                f"({len(rated)} rated remain)"
+            )
         return rated
+
+    # Soft gate: keep unrated results if we'd be left with too few
     return results
 
 
@@ -874,8 +919,23 @@ def search_agent(state: AgentState) -> dict:
                             f"Supplemental search #{_supplemental_search_count} triggered for query: '{query}'"
                         )
                         try:
-                            supplemental_q = f"{query} amazon.in flipkart"
-                            extra = _call_serper(supplemental_q, max_price=max_price, category=category)
+                            # Use per-platform site: queries — avoids appending domain
+                            # names that break _enrich_query's enrichment logic.
+                            amazon_q = f"{query} site:amazon.in"
+                            flipkart_q = f"{query} site:flipkart.com"
+
+                            import concurrent.futures as _cf
+                            with _cf.ThreadPoolExecutor(max_workers=2) as _pool:
+                                fut_amz = _pool.submit(
+                                    _call_serper, amazon_q, max_price, category
+                                )
+                                fut_fk = _pool.submit(
+                                    _call_serper, flipkart_q, max_price, category
+                                )
+                                extra_amz = fut_amz.result(timeout=8)
+                                extra_fk = fut_fk.result(timeout=8)
+
+                            extra = extra_amz + extra_fk
                             extra = _affix_exclusion_check(query, extra)
                             existing_titles = {p["title"] for p in results}
                             added = 0
@@ -885,7 +945,10 @@ def search_agent(state: AgentState) -> dict:
                                     existing_titles.add(p["title"])
                                     added += 1
                             if added:
-                                logger.info(f"Supplemental search added {added} Amazon/Flipkart products")
+                                logger.info(
+                                    f"Supplemental search #{_supplemental_search_count} "
+                                    f"added {added} Amazon/Flipkart products"
+                                )
                         except Exception as e:
                             logger.warning(f"Supplemental Amazon/Flipkart search failed: {e}")
 
