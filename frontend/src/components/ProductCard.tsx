@@ -8,6 +8,8 @@ import { SocialProofPanel } from '@/components/SocialProofPanel'
 import dynamic from 'next/dynamic'
 import { ShareButton } from '@/components/product/ShareButton'
 import { BarChart3 } from 'lucide-react'
+import { useX402 } from '@/hooks/useX402'
+import { PriceLockCard } from '@/components/PriceLockCard'
 
 // Heavy drawer — load only when user opens it (not on initial card render)
 const ExplainDrawer = dynamic(
@@ -100,6 +102,27 @@ export function ProductCard({
 
   const { address, connected, connect, signTransaction, disconnect } = usePeraWallet()
 
+  // ── x402 Price Lock (winner card only) ──────────────────────────────────
+  const { x402State, initiateVerification, reset: resetX402 } = useX402()
+
+  async function handleX402Verify() {
+    // Ensure wallet is connected first, reusing the existing peraWallet singleton.
+    let connectAddress = address
+    if (!connected) {
+      connectAddress = await connect()
+      if (!connectAddress) return
+    }
+    // Pass the signTransaction helper — it handles WalletConnect session
+    // reconnect and algosdk v3 → Pera v1.5.x compatibility internally.
+    // Also pass product.price so the backend returns the real price in the lock payload.
+    await initiateVerification(
+      product.title,
+      signTransaction,
+      connectAddress!,
+      product.price,
+    )
+  }
+
   type WatchState = 'hidden' | 'input' | 'saved'
   const [watchState, setWatchState] = useState<WatchState>('hidden')
   const [targetPrice, setTargetPrice] = useState('')
@@ -159,6 +182,14 @@ export function ProductCard({
 
       // 2. Sign transaction via Pera Wallet
       setConfirmState('signing')
+
+      // ── 4100 guard: wait for WC session to settle ────────────────────────
+      // If the user just completed an x402 price-lock signing, the Pera
+      // WalletConnect v2 session may still have a pending request registered
+      // from the x402 USDC axfer. Sending another signing request immediately
+      // triggers error 4100. A short delay allows the session to clear.
+      await new Promise((r) => setTimeout(r, 3000))
+
       const signedB64 = await signTransaction(prepData.txn_b64, connectAddress!)
       if (!signedB64) {
         setConfirmState('idle') // user cancelled or failed to sign
@@ -262,7 +293,7 @@ export function ProductCard({
     : { border: '1px solid #222' }
 
   return (
-    <div style={{ perspective: 1000 }} className="h-full">
+    <div style={{ perspective: 1000 }} className="h-full min-h-[280px]">
       <motion.div
         ref={ref}
         onMouseMove={handleMouseMove}
@@ -317,7 +348,7 @@ export function ProductCard({
         {product.title}
       </h3>
 
-      {product.link && product.link !== '#' && (
+      {product.link && product.link.startsWith('https://') && (
         <a
           href={product.link}
           target="_blank"
@@ -337,7 +368,7 @@ export function ProductCard({
             ₹{product.price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </p>
           <p className="text-[10px] text-zinc-500 leading-tight mt-0.5">
-            Prices fetched via Google Shopping. Live store prices may vary due to variants or sales.
+            Price shown is from Google Shopping. Verify at retailer before purchase.
           </p>
         </div>
         {product.price_drop_pct != null && product.price_drop_pct > 0 && product.historical_30d_avg != null && (
@@ -418,8 +449,85 @@ export function ProductCard({
       )}
 
       <div style={{ transform: 'translateZ(30px)' }} className="mt-4 relative z-20 w-full flex-grow flex flex-col justify-end">
-        {/* Algorand badge */}
-        {confirmState === 'idle' && (
+        {/* ── x402 Price Lock CTA — winner card only ─────────────────────── */}
+        {isWinner && (
+          <div className="mb-3">
+            {x402State.status === 'locked' && x402State.priceLock ? (
+              <PriceLockCard
+                priceLock={x402State.priceLock}
+                confirmState={confirmState}
+                txId={txId ?? undefined}
+                explorerUrl={explorerUrl ?? undefined}
+                onCheckout={() => {
+                  // Only trigger if not already processing or done.
+                  // PriceLockCard also guards this, but double-checking here prevents
+                  // any stale-closure edge cases from re-triggering handleConfirm.
+                  if (!['submitting', 'signing', 'connecting', 'done', 'local'].includes(confirmState)) {
+                    handleConfirm()
+                  }
+                }}
+              />
+            ) : (
+              <>
+                <div className="mb-2 flex items-center gap-1.5">
+                  <span className="inline-flex h-1.5 w-1.5 rounded-full" style={{ background: '#a78bfa' }} />
+                  <span className="text-xs" style={{ color: '#c4b5fd' }}>x402 · Algorand Testnet</span>
+                </div>
+
+                <button
+                  id={`x402-verify-btn-${product.title.slice(0, 20).replace(/\s+/g, '-').toLowerCase()}`}
+                  onClick={x402State.status === 'failed' ? () => { resetX402() } : handleX402Verify}
+                  disabled={['awaiting_payment', 'signing', 'confirming'].includes(x402State.status)}
+                  className="w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                  style={{
+                    background:
+                      x402State.status === 'failed'
+                        ? 'rgba(239,68,68,0.15)'
+                        : ['signing', 'confirming'].includes(x402State.status)
+                        ? 'rgba(217,119,6,0.15)'
+                        : 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                    color:
+                      x402State.status === 'failed'
+                        ? '#f87171'
+                        : ['signing', 'confirming'].includes(x402State.status)
+                        ? '#fbbf24'
+                        : '#fff',
+                    border:
+                      x402State.status === 'failed'
+                        ? '1px solid rgba(239,68,68,0.3)'
+                        : ['signing', 'confirming'].includes(x402State.status)
+                        ? '1px solid rgba(217,119,6,0.3)'
+                        : 'none',
+                    animation:
+                      ['signing', 'confirming'].includes(x402State.status)
+                        ? 'pulse 1.5s ease-in-out infinite'
+                        : 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!['awaiting_payment', 'signing', 'confirming', 'failed'].includes(x402State.status))
+                      e.currentTarget.style.opacity = '0.85'
+                  }}
+                  onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
+                >
+                  {x402State.status === 'idle'        && '🔒 Verify & lock deal · 0.1 ALGO'}
+                  {x402State.status === 'awaiting_payment' && 'Preparing payment…'}
+                  {x402State.status === 'signing'     && 'Check your Pera Wallet →'}
+                  {x402State.status === 'confirming'  && 'Confirming on Algorand…'}
+                  {x402State.status === 'failed'      && 'Verification failed — tap to retry'}
+                </button>
+
+                {x402State.status === 'failed' && x402State.error && (
+                  <p className="mt-1 text-[10px] text-center" style={{ color: '#f87171' }}>
+                    {x402State.error}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Algorand badge (non-winner cards) */}
+        {!isWinner && confirmState === 'idle' && (
           <div className="mb-2 flex items-center gap-1.5">
             <span
               className="inline-flex h-1.5 w-1.5 rounded-full"
@@ -429,25 +537,18 @@ export function ProductCard({
           </div>
         )}
 
-        {confirmState === 'idle' && (
+        {!isWinner && confirmState === 'idle' && (
           <button
             id={`confirm-btn-${product.title.slice(0, 20).replace(/\s+/g, '-').toLowerCase()}`}
             onClick={handleConfirm}
             className="w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200"
             style={{
-              background: isWinner ? 'linear-gradient(135deg, #7c3aed, #6d28d9)' : 'rgba(39,39,42,0.8)',
-              color: isWinner ? '#fff' : '#a1a1aa',
-              border: isWinner ? 'none' : '1px solid #333',
-            }}
-            onMouseEnter={(e) => {
-              if (!isWinner) return
-              e.currentTarget.style.opacity = '0.85'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.opacity = '1'
+              background: 'rgba(39,39,42,0.8)',
+              color: '#a1a1aa',
+              border: '1px solid #333',
             }}
           >
-            {isWinner ? '⚡ Confirm on Algorand' : 'Confirm on Algorand'}
+            Confirm on Algorand
           </button>
         )}
 

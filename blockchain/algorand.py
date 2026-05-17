@@ -146,6 +146,21 @@ def submit_signed_transaction(signed_txn_payload: str | bytes) -> dict:
         b64_clean += "=" * ((4 - len(b64_clean) % 4) % 4)
         signed_bytes = base64.b64decode(b64_clean)
         signed_txn = encoding.msgpack_decode(base64.b64encode(signed_bytes).decode("utf-8"))
+
+    # Validate transaction fields before broadcasting
+    try:
+        underlying = signed_txn.transaction if hasattr(signed_txn, "transaction") else signed_txn
+        expected_receiver = os.getenv("ALGORAND_RECEIVER", "")
+        if expected_receiver and str(underlying.receiver) != expected_receiver:
+            raise ValueError(
+                f"Transaction receiver mismatch: "
+                f"expected {expected_receiver}, got {underlying.receiver}"
+            )
+        if underlying.amt < 1:
+            raise ValueError("Transaction amount too low")
+    except AttributeError:
+        pass  # Non-payment transaction types (e.g. ASA transfers) skip payment checks
+
     tx_id = client.send_transaction(signed_txn)
 
     logger.info(f"Pera-signed tx submitted: {tx_id}")
@@ -378,68 +393,104 @@ def mint_purchase_nft(
         "asset_url": str,   ← testnet explorer URL
         "receipt_number": int,
     }
+    On any error: {"nft_url": None, "tx_id": None, "error": "NFT minting skipped"}
     """
-    from algosdk import account, transaction
-    import json
+    try:
+        from algosdk import account, transaction
+        import json
 
-    private_key = _get_private_key()
-    sender      = account.address_from_private_key(private_key)
-    client      = _get_client()
-    params      = client.suggested_params()
+        private_key = _get_private_key()
+        sender      = account.address_from_private_key(private_key)
+        client      = _get_client()
+        params      = client.suggested_params()
 
-    # ASA name — max 32 chars
-    asset_name = f"KARTIQ-RECEIPT #{receipt_number:04d}"
+        # ASA name — max 32 chars
+        asset_name = f"KARTIQ-RECEIPT #{receipt_number:04d}"
 
-    # Unit name — max 8 chars — encodes score
-    score_pct  = round((product.get("score", 0)) * 100)
-    unit_name  = f"KR{score_pct:03d}"
+        # Unit name — max 8 chars — encodes score
+        score_pct  = round((product.get("score", 0)) * 100)
+        unit_name  = f"KR{score_pct:03d}"
 
-    # Metadata note — encodes full purchase details
-    metadata = {
-        "standard": "arc3",
-        "name":     asset_name,
-        "product":  product.get("title", "")[:60],
-        "price":    product.get("price"),
-        "source":   product.get("source"),
-        "score":    product.get("score"),
-        "tx_id":    purchase_tx_id[:20],
-        "receipt":  receipt_number,
-    }
+        # Metadata note — encodes full purchase details
+        metadata = {
+            "standard": "arc3",
+            "name":     asset_name,
+            "product":  product.get("title", "")[:60],
+            "price":    product.get("price"),
+            "source":   product.get("source"),
+            "score":    product.get("score"),
+            "tx_id":    purchase_tx_id[:20],
+            "receipt":  receipt_number,
+        }
 
-    txn = transaction.AssetConfigTxn(
-        sender=sender,
-        sp=params,
-        total=1,          # NFT: exactly 1 unit
-        decimals=0,       # NFT: not divisible
-        default_frozen=False,
-        unit_name=unit_name,
-        asset_name=asset_name,
-        manager=sender,
-        reserve=sender,
-        freeze=sender,
-        clawback=sender,
-        note=json.dumps(metadata).encode(),
-        strict_empty_address_check=False,
-    )
+        txn = transaction.AssetConfigTxn(
+            sender=sender,
+            sp=params,
+            total=1,          # NFT: exactly 1 unit
+            decimals=0,       # NFT: not divisible
+            default_frozen=False,
+            unit_name=unit_name,
+            asset_name=asset_name,
+            manager=sender,
+            reserve=sender,
+            freeze=sender,
+            clawback=sender,
+            note=json.dumps(metadata).encode(),
+            strict_empty_address_check=False,
+        )
 
-    signed = txn.sign(private_key)
-    tx_id  = client.send_transaction(signed)
+        signed = txn.sign(private_key)
+        tx_id  = client.send_transaction(signed)
 
-    # Wait for confirmation and get asset ID
-    from algosdk.transaction import wait_for_confirmation
-    confirmed = wait_for_confirmation(client, tx_id, 4)
-    asset_id  = confirmed.get("asset-index")
+        # Wait for confirmation and get asset ID
+        from algosdk.transaction import wait_for_confirmation
+        confirmed = wait_for_confirmation(client, tx_id, 4)
+        asset_id  = confirmed.get("asset-index")
 
-    logger.info(
-        f"NFT receipt minted: ASA {asset_id} "
-        f"— Receipt #{receipt_number:04d}"
-    )
+        logger.info(
+            f"NFT receipt minted: ASA {asset_id} "
+            f"— Receipt #{receipt_number:04d}"
+        )
 
-    return {
-        "asset_id":       asset_id,
-        "asset_url":      f"https://testnet.explorer.perawallet.app/asset/{asset_id}",
-        "receipt_number": receipt_number,
-        "tx_id":          tx_id,
-        "purchase_tx_id": purchase_tx_id,
-        "product_title":  product.get("title", ""),
-    }
+        return {
+            "asset_id":       asset_id,
+            "asset_url":      f"https://testnet.explorer.perawallet.app/asset/{asset_id}",
+            "receipt_number": receipt_number,
+            "tx_id":          tx_id,
+            "purchase_tx_id": purchase_tx_id,
+            "product_title":  product.get("title", ""),
+        }
+    except Exception as e:
+        logger.warning(f"NFT minting skipped: {e}")
+        return {"nft_url": None, "tx_id": None, "error": "NFT minting skipped"}
+
+
+# ── x402 Price Lock (Phase 7) ─────────────────────────────────────────────────
+
+def get_facilitator_receipt(payment_header: str) -> str:
+    """Parse the X-PAYMENT-RESPONSE header injected by the x402-avm middleware.
+
+    The middleware attaches this header to the *incoming request* after the
+    GoPlausible facilitator has verified payment on Algorand testnet.  We
+    trust the facilitator — no re-verification via the Indexer is performed.
+
+    Args:
+        payment_header: Raw value of the X-PAYMENT-RESPONSE request header.
+
+    Returns:
+        The Algorand transaction ID string, or the raw header value as a
+        last-resort fallback if the JSON shape is unexpected.
+    """
+    try:
+        data = json.loads(payment_header)
+        # GoPlausible facilitator returns one of: txId / txid / receipt / tx_id
+        for key in ("txId", "txid", "tx_id", "receipt"):
+            if data.get(key):
+                return str(data[key])
+    except (json.JSONDecodeError, TypeError):
+        # Header is a plain transaction-ID string — return it as-is.
+        pass
+
+    # Final fallback: return the raw header value and let the caller decide.
+    return payment_header.strip()
+

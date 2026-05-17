@@ -127,13 +127,22 @@ export default function SharePage() {
   }
 
   const { data } = state
-  const winner = data!.winner!
+  const winner = data?.winner
+  if (!winner || typeof winner.score !== 'number' || !winner.title) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#080808]">
+        <p className="font-mono text-[13px] text-zinc-500">Invalid share data</p>
+      </div>
+    )
+  }
   const score = Math.round((winner.score ?? 0) * 100)
   const badge = sourceBadge(winner.source || '')
   const scoreColor = score >= 75 ? '#00d4aa' : score >= 50 ? '#f59e0b' : '#ef4444'
   let sharedDate = ''
   try {
-    sharedDate = new Date(data!.timestamp || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    sharedDate = new Date(data?.timestamp || Date.now()).toLocaleDateString(
+      'en-IN', { day: '2-digit', month: 'short', year: 'numeric' }
+    )
   } catch { sharedDate = 'Recently' }
 
   return (
@@ -193,7 +202,7 @@ export default function SharePage() {
               KartIQ picked · {sharedDate}
             </p>
             <p className="text-[12px] text-zinc-400 truncate">
-              "<span className="text-zinc-200">{data!.query}</span>"
+            "<span className="text-zinc-200">{data?.query}</span>"
             </p>
           </div>
           <ScoreArc score={score} />
@@ -259,7 +268,7 @@ export default function SharePage() {
             <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px]"
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#71717a' }}>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" strokeWidth="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
-              Compared <span className="text-zinc-300 font-semibold">{data!.total_compared}</span> products
+              Compared <span className="text-zinc-300 font-semibold">{data?.total_compared}</span> products
             </div>
             <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px]"
               style={{ background: `${scoreColor}10`, border: `1px solid ${scoreColor}20`, color: scoreColor }}>
@@ -292,7 +301,7 @@ export default function SharePage() {
 
         {/* CTA row */}
         <div className="px-6 pb-6 pt-2 flex flex-col gap-2.5">
-          {winner.link && winner.link !== '#' && (
+          {winner.link && winner.link.startsWith('https://') && (
             <a
               href={winner.link}
               target="_blank"
