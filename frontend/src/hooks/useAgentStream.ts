@@ -65,9 +65,10 @@ export function useAgentStream(query: string | null) {
     let isActive = true
     let usedFallback = false
 
-    // Close any existing connection
+    // Forcibly close any previous connection before starting a new one
     if (esRef.current) {
       esRef.current.close()
+      esRef.current = null
     }
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)

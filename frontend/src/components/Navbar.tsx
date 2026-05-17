@@ -3,8 +3,7 @@
 import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { Float, Environment, Sparkles, MeshTransmissionMaterial } from '@react-three/drei'
+import dynamic from 'next/dynamic'
 import {
   motion,
   AnimatePresence,
@@ -16,7 +15,18 @@ import {
   useSpring,
 } from 'framer-motion'
 import { usePeraWallet } from '@/hooks/usePeraWallet'
-import * as THREE from 'three'
+
+// Three.js logo — dynamically imported so the @react-three bundle is
+// excluded from the initial server-side render and page chunk.
+const NavbarLogoCanvas = dynamic(
+  () => import('@/components/NavbarLogo'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full rounded-lg bg-purple-500/20 border border-purple-500/40" />
+    ),
+  }
+)
 
 // ─── MAGNETIC EFFECT CONTAINER ────────────────────────────────────────────────
 function Magnetic({ children, intensity = 0.2 }: { children: React.ReactNode; intensity?: number }) {
@@ -87,47 +97,6 @@ function ScrambleText({ text, isHovered }: { text: string; isHovered: boolean })
   return <span className="font-mono tabular-nums tracking-widest sm:font-sans sm:tracking-normal">{displayText}</span>
 }
 
-// ─── 3D STELLAR LOGO ──────────────────────────────────────────────────────────
-function AnimatedLogo() {
-  const meshRef = useRef<THREE.Mesh>(null)
-  const ringRef = useRef<THREE.Mesh>(null)
-  const timeRef = useRef(0)
-
-  useFrame((state, delta) => {
-    timeRef.current += delta
-    const elapsed = timeRef.current
-    if (meshRef.current) {
-      meshRef.current.rotation.y = elapsed * 0.4
-      meshRef.current.rotation.x = elapsed * 0.2
-    }
-    if (ringRef.current) {
-      ringRef.current.rotation.z = elapsed * -0.2
-      ringRef.current.rotation.x = Math.sin(elapsed * 0.5) * 0.2
-    }
-  })
-
-  return (
-    <Float speed={2.5} rotationIntensity={1.2} floatIntensity={1.5}>
-      {/* Core Torus Knot */}
-      <mesh ref={meshRef} scale={0.7}>
-        <torusKnotGeometry args={[0.8, 0.25, 100, 16]} />
-        <meshPhysicalMaterial
-          color="#a78bfa"
-          roughness={0.1}
-          metalness={0.8}
-          transmission={0.9}
-          thickness={0.5}
-        />
-      </mesh>
-      
-      {/* Outer Orbiting Ring */}
-      <mesh ref={ringRef} scale={1.2}>
-        <torusGeometry args={[1, 0.02, 16, 100]} />
-        <meshBasicMaterial color="#c4b5fd" transparent opacity={0.4} />
-      </mesh>
-    </Float>
-  )
-}
 
 const NAV_LINKS = [
   { name: 'Home', href: '/' },
@@ -211,14 +180,7 @@ export function Navbar() {
         <Magnetic intensity={0.1}>
           <Link href="/" className="group/logo relative z-10 flex items-center gap-3">
             <div className="h-12 w-12 pt-1 transition-transform duration-500 group-hover/logo:scale-110">
-              <Canvas camera={{ position: [0, 0, 3] }} frameloop="always">
-                <ambientLight intensity={0.5} />
-                <pointLight position={[10, 10, 10]} intensity={1} color="#c4b5fd" />
-                <pointLight position={[-10, -10, -10]} intensity={0.5} color="#3b82f6" />
-                <Sparkles count={40} scale={2.5} size={1.5} speed={0.4} opacity={0.5} noise={0.2} color="#a78bfa" />
-                <AnimatedLogo />
-                <Environment preset="city" />
-              </Canvas>
+              <NavbarLogoCanvas />
             </div>
             <span className="relative text-2xl font-black tracking-tighter text-white">
               Kart<span className="text-purple-500 transition-colors duration-300 group-hover/logo:text-purple-400">IQ</span>
