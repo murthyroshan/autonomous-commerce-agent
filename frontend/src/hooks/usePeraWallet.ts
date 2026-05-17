@@ -12,7 +12,8 @@ import algosdk from 'algosdk'
 const WC_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? ''
 
 // Module-level singleton so all components share the same Pera session.
-const peraWallet = new PeraWalletConnect({
+// Exported so other hooks (e.g. useX402) can reuse the same instance.
+export const peraWallet = new PeraWalletConnect({
   // Use chainId for testnet — must match the Algorand node the backend is connected to.
   // WalletConnect v2 project ID — required to avoid "dapp not responding".
   ...(WC_PROJECT_ID ? { projectId: WC_PROJECT_ID } : {}),
@@ -125,18 +126,66 @@ export function usePeraWallet() {
       const txnBytes = Uint8Array.from(atob(txnB64), (c) => c.charCodeAt(0))
       const txn = algosdk.decodeUnsignedTransaction(txnBytes)
 
-      // Pera expects [[{ txn, signers }]] — explicitly provide the connected address 
+      // Pera expects [[{ txn, signers }]] — explicitly provide the connected address
       // as the signer to ensure correct routing to the mobile app.
       const signedTxns = await peraWallet.signTransaction([[{ txn, signers: [signerAddress] }]])
+      if (!signedTxns || signedTxns.length === 0 || !signedTxns[0]) {
+        return null // Treat as cancelled or empty response
+      }
       // Convert Uint8Array directly to a numbered array to bypass all Base64 translation errors
       return Array.from(signedTxns[0])
     } catch (e: any) {
       console.warn('Pera signing failed:', e)
-      const msg = e?.message?.toLowerCase() || ''
-      if (msg.includes('user rejected') || msg.includes('cancelled') || msg.includes('declined')) {
-        return null // Silently cancel
+      const msg     = e?.message?.toLowerCase() || ''
+      const code    = e?.data?.code ?? e?.code ?? 0
+
+      // ── User cancelled — not an error ──────────────────────────────────────
+      if (
+        msg.includes('user rejected') ||
+        msg.includes('cancelled') ||
+        msg.includes('declined') ||
+        code === 4001
+      ) {
+        return null
       }
-      throw e // Raise the error up!
+
+      // ── Error 4100: another request is already pending in this WC session ──
+      // This happens when the x402 signing completes but the WalletConnect v2
+      // session hasn't fully settled before the next signing request arrives.
+      // Fix: wait briefly, reconnect to flush the stale pending state, retry once.
+      if (code === 4100 || msg.includes('transaction request pending') || msg.includes('4100')) {
+        console.warn('Pera 4100: stale pending request — reconnecting and retrying...')
+        try {
+          // Give the mobile app 1.5 s to finalise the previous request
+          await new Promise((r) => setTimeout(r, 1500))
+          await peraWallet.reconnectSession()
+
+          // Retry the signing once after reconnect
+          const txnBytes2 = Uint8Array.from(atob(txnB64), (c) => c.charCodeAt(0))
+          const txn2      = algosdk.decodeUnsignedTransaction(txnBytes2)
+          const retried   = await peraWallet.signTransaction([[{ txn: txn2, signers: [signerAddress] }]])
+          if (!retried || retried.length === 0 || !retried[0]) {
+            return null
+          }
+          return Array.from(retried[0])
+        } catch (retryErr: any) {
+          const retryMsg = retryErr?.message?.toLowerCase() || ''
+          if (
+            retryMsg.includes('user rejected') ||
+            retryMsg.includes('cancelled') ||
+            retryMsg.includes('declined')
+          ) {
+            return null
+          }
+          throw new Error(
+            'Pera Wallet has a pending request that could not be cleared. ' +
+            'Please open Pera Wallet on your phone, dismiss any pending requests, ' +
+            'then try again. If the problem persists, disconnect and reconnect your wallet.',
+          )
+        }
+      }
+
+      throw e // Re-raise unexpected errors
     }
   }
 
