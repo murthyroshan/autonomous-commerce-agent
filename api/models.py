@@ -1,12 +1,12 @@
 """api/models.py — Pydantic models for request/response validation."""
 
 import re
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, ConfigDict, field_validator, Field
 from typing import Optional
 
 
 class SearchRequest(BaseModel):
-    query: str
+    query: str = Field(..., min_length=1, max_length=200)
 
     @field_validator("query")
     @classmethod
@@ -30,18 +30,18 @@ class ScoreBreakdown(BaseModel):
 
 
 class ProductResult(BaseModel):
-    title:           str
+    title:           str = Field(..., max_length=500)
     price:           float
     rating:          float
     review_count:    int
-    source:          str
-    link:            str
+    source:          str = Field(..., max_length=200)
+    link:            str = Field(..., max_length=2000)
     score:           Optional[float] = None
     score_breakdown: Optional[ScoreBreakdown] = None
 
 
 class Recommendation(ProductResult):
-    justification:  str
+    justification:  str = Field(..., max_length=2000)
     rank:           int = 1
     total_compared: int
 
@@ -55,8 +55,7 @@ class SearchResponse(BaseModel):
     battle_contenders: Optional[list] = None
     battle_report:     Optional[str] = None
 
-    class Config:
-        extra = "allow"  # forward-compatible with new pipeline fields
+    model_config = ConfigDict(extra="ignore")  # prevent internal pipeline fields from leaking to client
 
 
 class ConfirmRequest(BaseModel):

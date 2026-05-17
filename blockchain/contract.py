@@ -1,3 +1,4 @@
+import os
 from pyteal import *
 
 
@@ -8,12 +9,19 @@ def purchase_approval():
     1. Transaction note is non-empty (contains product data)
     2. Amount is greater than 0
     3. Transaction type is payment
+    4. Receiver matches the configured ALGORAND_RECEIVER address
     """
+    expected_receiver = os.getenv("ALGORAND_RECEIVER", "")
+    if not expected_receiver:
+        raise ValueError(
+            "ALGORAND_RECEIVER env var must be set before compiling contract"
+        )
     has_note = Len(Txn.note()) > Int(0)
     has_amount = Txn.amount() > Int(0)
     is_payment = Txn.type_enum() == TxnType.Payment
+    receiver_check = Txn.receiver() == Addr(expected_receiver)
 
-    return And(has_note, has_amount, is_payment)
+    return And(has_note, has_amount, is_payment, receiver_check)
 
 
 def clear_program():

@@ -39,7 +39,11 @@ def check_all_watchlists() -> None:
     for filename in os.listdir(WATCHLIST_DIR):
         if not filename.endswith(".json"):
             continue
-        user_id = filename[:-5]  # strip ".json"
+        from agents.watchlist import _safe_user_id
+        raw_id = filename[:-5]  # strip ".json"
+        user_id = _safe_user_id(raw_id)
+        if not user_id:
+            continue
 
         items = get_watchlist(user_id)
         changed = False
