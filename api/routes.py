@@ -63,14 +63,14 @@ async def health():
 
 @router.post("/search", response_model=SearchResponse)
 @_rate_limit("15/minute")
-async def search(request: SearchRequest, http_request: Request, user_id: str = Query(default="demo")):
+async def search(request: Request, req: SearchRequest, user_id: str = Query(default="demo")):
     """
     Run the full agent pipeline and return the complete result.
     Use this for non-streaming clients. Rate limited: 15 req/min per IP.
     """
     try:
         user_id = _safe_user_id(user_id)
-        result = await asyncio.to_thread(run_pipeline, request.query, user_id)
+        result = await asyncio.to_thread(run_pipeline, req.query, user_id)
         return SearchResponse(
             query=result["query"],
             scored_products=result.get("scored_products", []),
@@ -253,7 +253,7 @@ async def search_stream(request: Request, query: str, user_id: str = Query(defau
 
 @router.post("/confirm", response_model=ConfirmResponse)
 @_rate_limit("10/minute")
-async def confirm_purchase(request: ConfirmRequest, background_tasks: BackgroundTasks):
+async def confirm_purchase(request: Request, req: ConfirmRequest, background_tasks: BackgroundTasks):
     """
     Log a confirmed purchase to Algorand testnet and record in local history.
     Phase 4: plain PaymentTxn with note field.
@@ -269,7 +269,7 @@ async def confirm_purchase(request: ConfirmRequest, background_tasks: Background
         # Lazy import — Algorand SDK not required until Phase 4
         from blockchain.algorand import record_purchase_intent
         result = await asyncio.to_thread(
-            record_purchase_intent, request.model_dump(), request.user_id
+            record_purchase_intent, req.model_dump(), req.user_id
         )
         tx_id        = result.get("tx_id")
         app_id       = result.get("app_id")
@@ -277,23 +277,23 @@ async def confirm_purchase(request: ConfirmRequest, background_tasks: Background
         contract_url = result.get("contract_url")  # escrow smart contract link
     except ImportError:
         logger.info("Blockchain module not available (Phase 4+) — logging locally only")
-        tx_id = "local-" + request.title[:8].replace(" ", "-").lower()
+        tx_id = "local-" + req.title[:8].replace(" ", "-").lower()
         confirm_error = "Blockchain logging not enabled yet"
     except ValueError as e:
         logger.info(f"Blockchain not configured ({e}) — logging locally only")
-        tx_id = "local-" + request.title[:8].replace(" ", "-").lower()
+        tx_id = "local-" + req.title[:8].replace(" ", "-").lower()
         confirm_error = "Blockchain credentials not configured — purchase noted locally"
     except Exception as e:
         logger.warning(f"Blockchain logging failed: {e}. Falling back to local history.")
-        tx_id = "local-" + request.title[:8].replace(" ", "-").lower()
+        tx_id = "local-" + req.title[:8].replace(" ", "-").lower()
         confirm_error = f"Blockchain error: {str(e)} — purchase noted locally"
 
     # Phase 6: log to local purchase history — never block the response
     try:
-        product_dict = request.model_dump()
+        product_dict = req.model_dump()
         escrow_status = "locked" if app_id else None
         from agents.memory import log_purchase
-        await asyncio.to_thread(log_purchase, request.user_id, product_dict, tx_id, app_id, escrow_status)
+        await asyncio.to_thread(log_purchase, req.user_id, product_dict, tx_id, app_id, escrow_status)
     except Exception as e:
         logger.warning(f"log_purchase failed (non-blocking): {e}")
 
@@ -305,9 +305,9 @@ async def confirm_purchase(request: ConfirmRequest, background_tasks: Background
             receipt_number = get_next_receipt_number()
             nft_result = await asyncio.to_thread(
                 mint_purchase_nft,
-                request.model_dump(), tx_id, receipt_number
+                req.model_dump(), tx_id, receipt_number
             )
-            log_nft_receipt(request.user_id or "demo", nft_result)
+            log_nft_receipt(req.user_id or "demo", nft_result)
             nft_url = nft_result.get("asset_url")
             logger.info(f"NFT receipt #{receipt_number:04d} minted: ASA {nft_result['asset_id']}")
         except Exception as e:
@@ -326,7 +326,7 @@ async def confirm_purchase(request: ConfirmRequest, background_tasks: Background
 
 @router.post("/confirm/prepare")
 @_rate_limit("10/minute")
-async def prepare_transaction(request: ConfirmRequest):
+async def prepare_transaction(request: Request, req: ConfirmRequest):
     """
     Build an unsigned transaction for Pera wallet signing.
     Frontend calls this, gets txn_b64, passes to Pera,
@@ -335,7 +335,7 @@ async def prepare_transaction(request: ConfirmRequest):
     try:
         from blockchain.algorand import build_unsigned_transaction
 
-        result = await asyncio.to_thread(build_unsigned_transaction, request.model_dump())
+        result = await asyncio.to_thread(build_unsigned_transaction, req.model_dump())
         return {
             "success": True,
             "txn_b64": result.get("txn_b64"),
@@ -353,7 +353,7 @@ async def prepare_transaction(request: ConfirmRequest):
 
 @router.post("/confirm/submit")
 @_rate_limit("10/minute")
-async def submit_transaction(request: ConfirmRequest):
+async def submit_transaction(request: Request, req: ConfirmRequest):
     """
     Accept a Pera-signed transaction and submit it to Algorand.
     After the Pera tx is confirmed, deploys the escrow smart contract in a
@@ -362,14 +362,14 @@ async def submit_transaction(request: ConfirmRequest):
     try:
         from blockchain.algorand import submit_signed_transaction
 
-        if request.signed_txn_bytes and len(request.signed_txn_bytes) > 4096:
+        if req.signed_txn_bytes and len(req.signed_txn_bytes) > 4096:
             raise HTTPException(status_code=400, detail="Transaction payload too large")
 
-        if request.signed_txn_bytes:
+        if req.signed_txn_bytes:
             # Bypass base64 — accept raw integer array directly from JSON
-            payload = bytes(request.signed_txn_bytes)
-        elif request.signed_txn_b64:
-            payload = request.signed_txn_b64
+            payload = bytes(req.signed_txn_bytes)
+        elif req.signed_txn_b64:
+            payload = req.signed_txn_b64
         else:
             raise ValueError("Missing signed_txn_b64 or signed_txn_bytes in request body")
 
@@ -403,7 +403,7 @@ async def submit_transaction(request: ConfirmRequest):
             try:
                 from blockchain.algorand import deploy_and_fund_escrow
                 escrow_result = await asyncio.to_thread(
-                    deploy_and_fund_escrow, request.model_dump(), request.user_id or "demo"
+                    deploy_and_fund_escrow, req.model_dump(), req.user_id or "demo"
                 )
                 contract_url = escrow_result.get("contract_url")
                 app_id = escrow_result.get("app_id")
@@ -413,8 +413,8 @@ async def submit_transaction(request: ConfirmRequest):
 
         await asyncio.to_thread(
             log_purchase,
-            request.user_id or "demo",
-            request.model_dump(),
+            req.user_id or "demo",
+            req.model_dump(),
             tx_id,
             app_id,
             "locked" if app_id else None,
@@ -427,9 +427,9 @@ async def submit_transaction(request: ConfirmRequest):
                 receipt_number = get_next_receipt_number()
                 nft_result = await asyncio.to_thread(
                     mint_purchase_nft,
-                    request.model_dump(), tx_id, receipt_number
+                    req.model_dump(), tx_id, receipt_number
                 )
-                log_nft_receipt(request.user_id or "demo", nft_result)
+                log_nft_receipt(req.user_id or "demo", nft_result)
                 nft_url = nft_result.get("asset_url")
             except Exception as e:
                 logger.error(f"NFT mint failed: {e}")
@@ -445,12 +445,12 @@ async def submit_transaction(request: ConfirmRequest):
     except Exception as e:
         logger.error(f"submit_transaction error: {e}")
         # Log locally as fallback so it actually shows up in history after a Pera failure
-        local_tx_id = "local-" + request.title[:8].replace(" ", "-").lower()
+        local_tx_id = "local-" + req.title[:8].replace(" ", "-").lower()
         try:
             await asyncio.to_thread(
                 log_purchase,
-                request.user_id or "demo",
-                request.model_dump(),
+                req.user_id or "demo",
+                req.model_dump(),
                 local_tx_id,
             )
         except Exception as log_e:
