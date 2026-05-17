@@ -109,12 +109,9 @@ def get_social_proof(title: str, query: str = "") -> dict:
     youtube_snippet: Optional[str] = None
 
     # ── Reddit: organic search targeting Indian tech subreddits ──────────────
-    # Use multiple targeted subreddits for richer, higher-engagement threads
-    # Adding inurl:comments ensures we get actual discussion threads, not empty pages
-    reddit_subreddits = "site:reddit.com (r/india OR r/gadgets OR r/androidindia OR r/IndiaInvestments OR r/indiasocial OR r/TechiesIndia OR r/oneplus OR r/applesilicon)"
-    # Append literal "comments" string to search to strictly filter threads with engagement
-    # Wrap short_name in exact quotes to prevent Google returning unrelated brand threads (e.g., OnePlus reviews for a Noise watch)
-    reddit_q = f"\"{short_name}\" review \"comments\" {reddit_subreddits}"
+    # Use site:reddit.com to get any relevant Reddit threads
+    # Removed exact quotes around short_name to allow fuzzy matching (e.g. Buds3 vs Buds 3)
+    reddit_q = f"{short_name} review site:reddit.com"
     try:
         resp = requests.post(
             "https://google.serper.dev/search",
@@ -133,10 +130,9 @@ def get_social_proof(title: str, query: str = "") -> dict:
     except Exception as e:
         logger.warning(f"Serper Reddit search failed: {e}")
 
-    # Fallback Reddit search — broader if targeted subreddits returned nothing
+    # Fallback Reddit search — broader if the first attempt failed
     if not reddit_results:
-        # Crucially, keep the exact quotes on short_name to prevent hallucinated fallback results
-        reddit_q_broad = f"\"{short_name}\" review experience site:reddit.com"
+        reddit_q_broad = f"{short_name} reddit"
         try:
             resp = requests.post(
                 "https://google.serper.dev/search",
@@ -152,9 +148,7 @@ def get_social_proof(title: str, query: str = "") -> dict:
             logger.warning(f"Serper fallback Reddit search failed: {e}")
 
     # ── YouTube: use Serper's dedicated videos endpoint ──────────────────────
-    # Append literal "K views" OR "M views" to filter for massive videos
-    # Enclose in quotes to strictly block irrelevant YouTube products
-    yt_q = f"\"{short_name}\" review \"K views\" OR \"M views\" in hindi english"
+    yt_q = f"{short_name} review"
     try:
         resp = requests.post(
             "https://google.serper.dev/videos",
@@ -222,6 +216,7 @@ def get_social_proof(title: str, query: str = "") -> dict:
         "source_count":    source_count,
         "reddit_url":      reddit_url,
         "youtube_url":     youtube_url,
+        "is_mock":         False,
     }
 
 
@@ -241,4 +236,5 @@ def _mock_proof(title: str) -> dict:
         "source_count": 6,
         "reddit_url":   None,
         "youtube_url":  None,
+        "is_mock":      True,
     }
