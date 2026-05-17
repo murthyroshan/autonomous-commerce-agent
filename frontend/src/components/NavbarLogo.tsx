@@ -2,7 +2,7 @@
 
 import { useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Float, Environment, Sparkles } from '@react-three/drei'
+import { Float, Sparkles } from '@react-three/drei'
 import * as THREE from 'three'
 
 /**
@@ -33,12 +33,10 @@ function AnimatedLogoMesh() {
       {/* Core Torus Knot */}
       <mesh ref={meshRef} scale={0.7}>
         <torusKnotGeometry args={[0.8, 0.25, 100, 16]} />
-        <meshPhysicalMaterial
+        <meshStandardMaterial
           color="#a78bfa"
-          roughness={0.1}
-          metalness={0.8}
-          transmission={0.9}
-          thickness={0.5}
+          roughness={0.2}
+          metalness={0.6}
         />
       </mesh>
 
@@ -63,7 +61,6 @@ export default function NavbarLogoCanvas() {
       <pointLight position={[-10, -10, -10]} intensity={0.5} color="#3b82f6" />
       <Sparkles count={40} scale={2.5} size={1.5} speed={0.4} opacity={0.5} noise={0.2} color="#a78bfa" />
       <AnimatedLogoMesh />
-      <Environment preset="city" />
     </Canvas>
   )
 }
