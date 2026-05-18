@@ -18,13 +18,16 @@ import { usePeraWallet } from '@/hooks/usePeraWallet'
 
 // Three.js logo — dynamically imported so the @react-three bundle is
 // excluded from the initial server-side render and page chunk.
-const NavbarLogoCanvas = dynamic(
+// ⚠️ NavbarLogo MUST remain dynamically imported (ssr: false).
+// Static import pulls ~280KB Three.js into every page's initial bundle.
+// Do not change to a static import.
+const NavbarLogo = dynamic(
   () => import('@/components/NavbarLogo'),
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-full rounded-lg bg-purple-500/20 border border-purple-500/40" />
-    ),
+      <div className="w-6 h-6 rounded-lg bg-purple-500/20 border border-purple-500/40 animate-pulse" />
+    )
   }
 )
 
@@ -180,7 +183,7 @@ export function Navbar() {
         <Magnetic intensity={0.1}>
           <Link href="/" className="group/logo relative z-10 flex items-center gap-3">
             <div className="h-12 w-12 pt-1 transition-transform duration-500 group-hover/logo:scale-110">
-              <NavbarLogoCanvas />
+              <NavbarLogo />
             </div>
             <span className="relative text-2xl font-black tracking-tighter text-white">
               Kart<span className="text-purple-500 transition-colors duration-300 group-hover/logo:text-purple-400">IQ</span>

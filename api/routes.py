@@ -111,7 +111,7 @@ async def search_stream(request: Request, query: str, user_id: str = Query(defau
             return f"data: {json.dumps(data)}\n\n"
 
         try:
-            from agents.pipeline import _detect_vs_query, _run_single_search, _pin_best_match, _is_relevant
+            from agents.pipeline import _detect_vs_query, _run_single_search, _pin_best_match, _is_relevant, _match_side
             is_vs, side_a, side_b = _detect_vs_query(query.strip())
             state = initial_state(query.strip())
 
@@ -138,9 +138,14 @@ async def search_stream(request: Request, query: str, user_id: str = Query(defau
                     return
 
                 # Pin the BEST TITLE-MATCHING product from each side's pool
-                # (prevents "oneplus 12" from pinning to an "oneplus 12r" result)
                 contender_a = _pin_best_match(side_a, results_a) if results_a else None
                 contender_b = _pin_best_match(side_b, results_b) if results_b else None
+
+                # Validate that the pinned contenders ACTUALLY match the requested sides
+                if contender_a and not _match_side(contender_a["title"], side_a):
+                    contender_a = None
+                if contender_b and not _match_side(contender_b["title"], side_b):
+                    contender_b = None
 
                 # Guard: if both sides pinned to the same product, use pool fallback
                 if (
@@ -150,6 +155,21 @@ async def search_stream(request: Request, query: str, user_id: str = Query(defau
                     contender_a = results_a[0] if results_a else None
                     b_pool = [p for p in results_b if p["title"] != (contender_a or {}).get("title")]
                     contender_b = b_pool[0] if b_pool else (results_b[0] if results_b else None)
+                    
+                    if contender_a and not _match_side(contender_a["title"], side_a):
+                        contender_a = None
+                    if contender_b and not _match_side(contender_b["title"], side_b):
+                        contender_b = None
+
+                if not contender_a and not contender_b:
+                    yield sse({"type": "error", "message": f"Could not find exact matches for '{side_a}' or '{side_b}'"})
+                    return
+                elif contender_a and not contender_b:
+                    yield sse({"type": "error", "message": f"Could not find exact match for '{side_b}'"})
+                    return
+                elif contender_b and not contender_a:
+                    yield sse({"type": "error", "message": f"Could not find exact match for '{side_a}'"})
+                    return
 
                 all_products = results_a + results_b
                 all_products.sort(key=lambda x: x.get("score", 0), reverse=True)
@@ -351,9 +371,14 @@ async def prepare_transaction(request: Request, req: ConfirmRequest):
         }
 
 
+from fastapi import BackgroundTasks
+
 @router.post("/confirm/submit")
 @_rate_limit("10/minute")
-async def submit_transaction(request: Request, req: ConfirmRequest):
+async def submit_transaction(
+    request: Request,
+    req: ConfirmRequest,
+):
     """
     Accept a Pera-signed transaction and submit it to Algorand.
     After the Pera tx is confirmed, deploys the escrow smart contract in a
@@ -378,53 +403,88 @@ async def submit_transaction(request: Request, req: ConfirmRequest):
         result = await asyncio.to_thread(submit_signed_transaction, payload)
         tx_id = result["tx_id"]
 
-        # Deploy escrow smart contract in background (non-blocking)
-        # Returns contract_url immediately if mnemonic is available.
-        contract_url: str | None = None
-        app_id: int | None = None
-        import os
-        if os.getenv("ALGORAND_MNEMONIC"):
-            try:
-                from blockchain.algorand import deploy_and_fund_escrow
-                escrow_result = await asyncio.to_thread(
-                    deploy_and_fund_escrow, req.model_dump(), req.user_id or "demo"
-                )
-                contract_url = escrow_result.get("contract_url")
-                app_id = escrow_result.get("app_id")
-                logger.info(f"Escrow deployed: app_id={app_id}  contract={contract_url}")
-            except Exception as escrow_err:
-                logger.warning(f"Escrow deploy skipped (non-fatal): {escrow_err}")
-
+        # ── Step 2: Log purchase immediately (so history works even if escrow fails)
         await asyncio.to_thread(
             log_purchase,
             req.user_id or "demo",
             req.model_dump(),
             tx_id,
-            app_id,
-            "locked" if app_id else None,
+            None,   # app_id not known yet — will be updated below
+            None,
         )
-        nft_url = None
+
+        # ── Step 3: Deploy escrow — synchronous, 12s hard timeout
+        contract_url: str | None = None
+        app_id: int | None = None
+        if os.getenv("ALGORAND_MNEMONIC"):
+            try:
+                from blockchain.algorand import deploy_and_fund_escrow
+                escrow_result = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        deploy_and_fund_escrow,
+                        req.model_dump(),
+                        req.user_id or "demo"
+                    ),
+                    timeout=12.0
+                )
+                contract_url = escrow_result.get("contract_url")
+                app_id = escrow_result.get("app_id")
+                logger.info(f"Escrow deployed: app_id={app_id} contract={contract_url}")
+
+                # Update the history record with the real app_id
+                if app_id:
+                    await asyncio.to_thread(
+                        log_purchase,
+                        req.user_id or "demo",
+                        req.model_dump(),
+                        tx_id,
+                        app_id,
+                        "locked",
+                    )
+            except asyncio.TimeoutError:
+                logger.warning("Escrow deploy timed out after 12s")
+            except Exception as e:
+                logger.warning(f"Escrow deploy failed: {e}")
+
+        # ── Step 4: Mint NFT — synchronous, 10s hard timeout
+        nft_url: str | None = None
         if tx_id and not tx_id.startswith("local-"):
             try:
                 from blockchain.algorand import mint_purchase_nft
                 from agents.memory import get_next_receipt_number, log_nft_receipt
                 receipt_number = get_next_receipt_number()
-                nft_result = await asyncio.to_thread(
-                    mint_purchase_nft,
-                    req.model_dump(), tx_id, receipt_number
+                nft_result = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        mint_purchase_nft,
+                        req.model_dump(), tx_id, receipt_number
+                    ),
+                    timeout=10.0
                 )
                 log_nft_receipt(req.user_id or "demo", nft_result)
-                nft_url = nft_result.get("asset_url")
+                nft_url = nft_result.get("asset_url") or nft_result.get("nft_url")
+                logger.info(
+                    f"NFT #{receipt_number:04d} minted: ASA {nft_result.get('asset_id')} "
+                    f"nft_url={nft_url}"
+                )
+            except asyncio.TimeoutError:
+                logger.warning("NFT mint timed out after 10s")
             except Exception as e:
                 logger.error(f"NFT mint failed: {e}")
 
-        response: dict = {"success": True, **result}
+        # ── Step 5: Build explicit response — never use **result spread
+        response: dict = {
+            "success": True,
+            "tx_id": tx_id,
+            "explorer_url": result.get("explorer_url"),
+        }
         if contract_url:
             response["contract_url"] = contract_url
         if app_id:
             response["app_id"] = app_id
         if nft_url:
             response["nft_url"] = nft_url
+
+        logger.info(f"submit_transaction response keys: {list(response.keys())}")
         return response
     except Exception as e:
         logger.error(f"submit_transaction error: {e}")

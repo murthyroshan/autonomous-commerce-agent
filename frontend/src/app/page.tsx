@@ -1,4 +1,5 @@
 'use client';
+import { useRouter } from 'next/navigation';
 import { CursorGlow } from '@/components/landing/CursorGlow';
 import { HorizontalTicker } from '@/components/landing/HorizontalTicker';
 import { HeroSection } from '@/components/landing/HeroSection';
@@ -10,6 +11,7 @@ import { NegotiationCard } from '@/components/landing/NegotiationCard';
 import { TerminalShowcase } from '@/components/landing/TerminalShowcase';
 
 export default function LandingPage() {
+  const router = useRouter()
   return (
     <div className="relative min-h-screen bg-[#050508] text-white selection:bg-violet-500/50 font-sans w-full">
       
@@ -67,6 +69,7 @@ export default function LandingPage() {
              </h1>
              <button 
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                onMouseEnter={() => router.prefetch('/search')}
                 className="px-10 py-5 bg-white text-black font-extrabold rounded-full hover:scale-105 transition-transform hover:bg-zinc-200 shadow-[0_10px_40px_rgba(255,255,255,0.2)] text-lg tracking-wider uppercase"
              >
                 Return to Search

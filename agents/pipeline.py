@@ -138,22 +138,20 @@ def _pin_best_match(sub_query: str, products: list[dict]) -> dict | None:
     return best_product or products[0]
 
 
+def _match_side(title: str, side: str) -> bool:
+    """Check if the title strictly contains all tokens of the given side."""
+    t_lower = title.lower().replace("-", " ")
+    tokens = [t for t in side.lower().replace("-", " ").split() if len(t) > 1]
+    if not tokens:
+        return False
+    return all(tok in t_lower for tok in tokens)
+
 def _is_relevant(title: str, side_a: str, side_b: str) -> bool:
     """
     Check if the title strictly contains all tokens of either side A or side B.
     Drops completely unrelated products (e.g. 'OnePlus 15' when querying '12 vs 12R').
     """
-    t_lower = title.lower().replace("-", " ")
-
-    def match_side(side: str):
-        # Ignore 1-char tokens like "a", focus on main model numbers/brands
-        tokens = [t for t in side.lower().replace("-", " ").split() if len(t) > 1]
-        if not tokens:
-            return False
-        return all(tok in t_lower for tok in tokens)
-
-    return match_side(side_a) or match_side(side_b)
-
+    return _match_side(title, side_a) or _match_side(title, side_b)
 
 def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
     """
@@ -199,12 +197,18 @@ def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
             return {**state, "error": f"No products found for '{side_a}' or '{side_b}'"}
 
         # Pin the BEST TITLE-MATCHING product to each side (not just top scorer)
-        # This prevents "oneplus 12" from pinning to an "oneplus 12r" result
         contender_a = _pin_best_match(side_a, results_a) if results_a else None
         contender_b = _pin_best_match(side_b, results_b) if results_b else None
 
+        # Validate that the pinned contenders ACTUALLY match the requested sides
+        if contender_a and not _match_side(contender_a["title"], side_a):
+            logger.warning(f"Rejecting contender_a '{contender_a['title']}' as it does not match '{side_a}'")
+            contender_a = None
+        if contender_b and not _match_side(contender_b["title"], side_b):
+            logger.warning(f"Rejecting contender_b '{contender_b['title']}' as it does not match '{side_b}'")
+            contender_b = None
+
         # Guard: if both sides pinned to the same product, fallback to scores
-        logger.info(f"DEBUG PINNING:\n Side A pinned: {(contender_a or {}).get('title')}\n Side B pinned: {(contender_b or {}).get('title')}")
         if (
             contender_a and contender_b
             and contender_a["title"] == contender_b["title"]
@@ -218,14 +222,22 @@ def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
             # Exclude contender_a from side_b picks
             b_pool = [p for p in results_b if p["title"] != (contender_a or {}).get("title")]
             contender_b = b_pool[0] if b_pool else (results_b[0] if results_b else None)
+            
+            # Re-validate fallbacks
+            if contender_a and not _match_side(contender_a["title"], side_a):
+                contender_a = None
+            if contender_b and not _match_side(contender_b["title"], side_b):
+                contender_b = None
 
-        if contender_a and not contender_b:
+        if not contender_a and not contender_b:
+            return {**state, "error": f"Could not find exact matches for '{side_a}' or '{side_b}'"}
+        elif contender_a and not contender_b:
             # Only one side found — fall back to standard mode
             logger.warning(f"VS: only side A found products. Falling back to standard.")
-            state["search_results"] = [p for p in results_a]
+            state["search_results"] = [p for p in results_a if _match_side(p["title"], side_a)]
         elif contender_b and not contender_a:
             logger.warning(f"VS: only side B found products. Falling back to standard.")
-            state["search_results"] = [p for p in results_b]
+            state["search_results"] = [p for p in results_b if _match_side(p["title"], side_b)]
         else:
             # Both sides found — merge, deduplicate, sort
             all_products = results_a + results_b
@@ -233,6 +245,7 @@ def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
             # Deduplicate by title (keep highest-scored occurrence) and strict filter
             seen: set[str] = set()
             deduped: list[dict] = []
+
             for p in all_products:
                 if p["title"] not in seen and _is_relevant(p["title"], side_a, side_b):
                     seen.add(p["title"])
