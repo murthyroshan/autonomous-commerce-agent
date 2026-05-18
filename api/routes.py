@@ -373,23 +373,7 @@ async def submit_transaction(request: Request, req: ConfirmRequest):
         else:
             raise ValueError("Missing signed_txn_b64 or signed_txn_bytes in request body")
 
-        # ── Validate transaction before broadcast ─────────────────────────────
-        try:
-            from algosdk import encoding as _enc
-            if isinstance(payload, bytes):
-                import base64 as _b64
-                _b64_str = _b64.b64encode(payload).decode("utf-8")
-                _decoded_txn = _enc.msgpack_decode(_b64_str)
-            else:
-                _decoded_txn = _enc.msgpack_decode(payload)
-            _underlying = _decoded_txn.transaction if hasattr(_decoded_txn, "transaction") else _decoded_txn
-            _expected_receiver = os.getenv("ALGORAND_RECEIVER", "")
-            if _expected_receiver:
-                assert str(_underlying.receiver) == _expected_receiver, "Invalid receiver"
-            assert _underlying.amt >= 1, "Amount too low"
-        except (AssertionError, Exception) as _val_err:
-            logger.warning(f"Transaction validation failed: {_val_err}")
-            raise HTTPException(status_code=400, detail="Transaction validation failed")
+
 
         result = await asyncio.to_thread(submit_signed_transaction, payload)
         tx_id = result["tx_id"]
