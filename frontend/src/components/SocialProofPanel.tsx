@@ -12,6 +12,7 @@ interface SocialProofData {
   source_count: number
   reddit_url: string | null
   youtube_url: string | null
+  is_mock?: boolean
 }
 
 const sentimentStyle: Record<
@@ -124,6 +125,17 @@ export function SocialProofPanel({ title, query = '' }: Props) {
                 border:     `1px solid ${style.border}`,
               }}
             >
+              {/* Mock data disclaimer */}
+              {data.is_mock && (
+                <p
+                  className="mb-2 flex items-center gap-1 text-xs"
+                  style={{ color: '#71717a' }}
+                >
+                  <span>⚠</span>
+                  <span>Live data unavailable — showing estimated signals</span>
+                </p>
+              )}
+
               {/* Highlights */}
               {data.highlights.length > 0 ? (
                 <ul className="space-y-2">

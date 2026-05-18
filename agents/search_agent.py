@@ -34,6 +34,9 @@ _groq_client = None  # lazily created on first use
 _CACHE_TTL_SECONDS = 3600  # 1 hour
 _search_cache: dict[str, tuple[float, dict]] = {}
 
+# ── Supplemental search call counter (for monitoring) ────────────────────────
+_supplemental_search_count = 0
+
 
 def _cache_get(key: str) -> dict | None:
     """Return cached result if still within TTL, else None."""
@@ -48,7 +51,10 @@ def _cache_get(key: str) -> dict | None:
 
 
 def _cache_set(key: str, value: dict) -> None:
-    """Store result in cache with current timestamp."""
+    """Store result in cache with current timestamp. Evicts oldest entry when cap reached."""
+    if len(_search_cache) >= 500:
+        oldest_key = min(_search_cache, key=lambda k: _search_cache[k][0])
+        del _search_cache[oldest_key]
     _search_cache[key] = (time.time(), value)
 
 
@@ -330,13 +336,35 @@ def _affix_exclusion_check(query: str, products: list[dict]) -> list[dict]:
     valid_products = []
     query_lower = query.lower()
     
-    # Provide immunity to price integers so they aren't mistaken as model tokens (e.g. '4000')
-    query_no_price = re.sub(r'(under|below|less than|max|budget|rs\.?|₹)\s*[\d,]+\s*k?\b', '', query_lower)
-    query_no_price = re.sub(r'\b[\d,]+\s*k?\s*(?:mein|me\b|rupay|rupee)', '', query_no_price)
+    # Strip price/spec integers before extracting model tokens.
+    # Rule: any standalone number > 999 is a price or spec, not a model token.
+    # Rule: any number with a k suffix (e.g. 20k, 30K) is a price.
+    query_no_price = re.sub(
+        r'(under|below|less\s+than|max|budget|rs\.?|₹|upto|up\s+to|within|around|for)\s*'
+        r'[\d,]+\s*(k|thousand)?\b',
+        '', query_lower, flags=re.IGNORECASE
+    )
+    query_no_price = re.sub(r'\b[\d,]+\s*(k)?\s*(?:mein|me\b|rupay|rupee)\b', '', query_no_price)
+    # Remove all standalone large numbers (>999) — these are always prices/specs
+    query_no_price = re.sub(r'\b\d{4,}\b', '', query_no_price)
+    # Remove k-suffixed numbers (30k, 20K)
+    query_no_price = re.sub(r'\b\d+[kK]\b', '', query_no_price)
 
     # Extract structural model tokens (e.g. '13', 'm3', 's24') from the normalized query
     model_tokens = re.findall(r'\b[a-z]*[0-9]+[a-z]*\b', query_no_price)
+
+    # No model tokens = generic query; affix filtering would only lose results
+    if not model_tokens:
+        return products
     
+    # For Apple products, chip/model variants are always relevant —
+    # M3 Pro and M3 Max ARE valid results for "MacBook M3".
+    # Skip affix exclusion entirely for Apple queries.
+    apple_keywords = ['macbook', 'iphone', 'ipad', 'airpods', 'apple watch',
+                      'mac mini', 'imac']
+    if any(kw in query_lower for kw in apple_keywords):
+        return products
+
     for p in products:
         title_lower = p.get('title', '').lower()
         is_valid = True
@@ -365,11 +393,25 @@ def _affix_exclusion_check(query: str, products: list[dict]) -> list[dict]:
                     break
             
             # Reject if token has separated generic suffix (e.g. '13 Pro')
-            variant_words = ['pro', 'max', 'ultra', 'plus', 'fe', 'lite', 'se', 'r', 'mini', 'air', 'studio']
+            variant_words = [
+                'pro', 'max', 'ultra', 'plus', 'fe', 'lite', 'se', 'r',
+                'mini', 'air', 'studio', 'active', 'neo', 'edge', 'turbo',
+            ]
+            # Normalize the query to catch symbol equivalents (+ → plus, & → and)
+            query_normalized = (
+                query_lower
+                .replace('+', ' plus')
+                .replace('&', ' and')
+            )
             for var in variant_words:
                 sep_pattern = rf'\b{re.escape(token)}\s+{var}\b'
                 if re.search(sep_pattern, title_lower):
-                    if not re.search(sep_pattern, query_lower) and var not in query_lower:
+                    # Only filter if this variant is genuinely absent from the query
+                    var_in_query = (
+                        re.search(sep_pattern, query_normalized) is not None
+                        or var in query_normalized.split()
+                    )
+                    if not var_in_query:
                         logger.info(f"Filtered out variant word: '{var}' in '{title_lower}'")
                         is_valid = False
                         break
@@ -385,7 +427,15 @@ def _affix_exclusion_check(query: str, products: list[dict]) -> list[dict]:
 
         if is_valid:
             valid_products.append(p)
-            
+
+    # Safety net: if the filter removed ALL results, return unfiltered rather
+    # than letting the pipeline see an empty list and fall through to mock data.
+    if not valid_products and products:
+        logger.warning(
+            f"_affix_exclusion_check filtered ALL {len(products)} products "
+            f"for query '{query}' — returning unfiltered to avoid empty results"
+        )
+        return products
     return valid_products
 
 
@@ -428,30 +478,97 @@ _CATEGORY_QUERY_NOUN: dict[str, str] = {
 }
 
 
+def _is_apple_product_query(query: str) -> bool:
+    q = query.lower()
+    return any(brand in q for brand in [
+        'macbook', 'iphone', 'ipad', 'airpods', 'apple watch',
+        'mac mini', 'imac', 'mac pro', 'mac studio'
+    ])
+
+
+def _is_specific_model_query(query: str) -> bool:
+    """
+    Return True if the query refers to a specific product model or variant.
+
+    Detects presence of:
+      - digits (model numbers: 'Galaxy S24', 'OnePlus 12')
+      - known variant suffixes ('Pro', 'Ultra', 'Active', 'Neo', 'Lite', etc.)
+    A specific model query should NOT have a category noun appended — the
+    model name itself pins the search more precisely.
+    """
+    variant_suffixes = [
+        'active', 'pro', 'ultra', 'neo', 'lite', 'se', 'fe', 'classic',
+        'plus', 'air', 'mini', 'max', 'studio', 'turbo', 'prime', 'sport',
+    ]
+    q = query.lower()
+    # Digits anywhere → specific model
+    if re.search(r'\d', q):
+        return True
+    # Known variant suffix as a whole word
+    for suffix in variant_suffixes:
+        if re.search(rf'\b{re.escape(suffix)}\b', q):
+            return True
+    return False
+
+
 def _enrich_query(query: str, category: str = "default") -> str:
     """Append context for better Google Shopping results in the Indian market.
 
-    Injects the category noun so searches like 'oneplus 15' don't bleed into
-    'NEMA 5-15R power connectors' — the category context pins Google Shopping
-    to the right product type at the API level, before any post-filtering.
+    For specific model queries (e.g. 'Redmi Watch 5 Active'), skips the
+    category noun — the model name is already precise enough and adding
+    'smartwatch' can dilute the signal.
+    For generic queries (e.g. 'gaming laptop'), injects the category noun
+    to prevent cross-category contamination.  The noun is only appended if
+    NONE of its component words already appear in the query — this prevents
+    duplicates like "smartwatch under 5000 smartwatch buy online India".
     """
-    q = query.lower()
-    # Already has platform or site context — leave as-is
+    q = query.lower().strip()
+
+    # Already platform-targeted — leave alone
     if any(w in q for w in ['amazon', 'flipkart', 'site:']):
         return query
 
-    # Inject category noun if it isn't already present in the query
-    cat_noun = _CATEGORY_QUERY_NOUN.get(category, "")
-    if cat_noun and cat_noun not in q:
-        enriched = f"{query} {cat_noun}"
-    else:
-        enriched = query
+    # Apple products need "Apple" prefix for Indian retailer indexing
+    if _is_apple_product_query(query):
+        q_lower = query.lower()
+        # Extract the chip generation if present (m1/m2/m3/m4 + variant)
+        chip_match = re.search(r'\b(m[1-4])\s*(pro|max|ultra)?\b', q_lower)
+        chip_str = chip_match.group(0).upper() if chip_match else ""
+        
+        # Build Apple-specific query: "Apple MacBook Air M3" style
+        if 'macbook' in q_lower:
+            variant = 'MacBook Pro' if 'pro' in q_lower else 'MacBook Air'
+            if chip_str:
+                base = f"Apple {variant} {chip_str}"
+            else:
+                base = f"Apple {variant}"
+        elif 'iphone' in q_lower:
+            base = f"Apple {query.replace('apple', '').replace('Apple', '').strip()}"
+        else:
+            # Generic Apple: just prepend "Apple" if not already there
+            base = f"Apple {query}" if 'apple' not in q_lower else query
+        
+        suffix = "price in India buy online"
+        return f"{base} {suffix}"
 
-    # Already has India context — just add buy-intent
+    # For specific-model queries, skip category noun entirely —
+    # the model name is more precise than any generic noun
+    if _is_specific_model_query(query):
+        base = query
+    else:
+        cat_noun = _CATEGORY_QUERY_NOUN.get(category, "")
+        # Only append cat_noun if none of its words already appear in query
+        noun_words = cat_noun.split()
+        already_present = all(w in q for w in noun_words) if noun_words else True
+        if cat_noun and not already_present:
+            base = f"{query} {cat_noun}"
+        else:
+            base = query
+
+    # Add India buy-intent suffix — but only once
     if any(w in q for w in ['india', 'indian', 'inr', '₹']):
-        return f"{enriched} buy online"
-    # Generic: add India + buy-intent
-    return f"{enriched} buy online India"
+        return f"{base} buy online"
+    return f"{base} buy online India"
 
 
 def _broaden_query(query: str) -> str:
@@ -487,11 +604,12 @@ def _parse_int(raw) -> int:
         return 0
 
 
-def _safe_search_term(title: str, max_words: int = 5) -> str:
+def _safe_search_term(title: str, max_words: int = 4) -> str:
     """
     Extract a concise, URL-safe search term from a verbose product title.
-    Limits to the first max_words words and strips special characters that
-    break retail search URLs (parentheses, slashes, commas, etc.).
+    Limits to the first max_words words (brand + model only) and strips special
+    characters that break retail search URLs (parentheses, slashes, commas, etc.).
+    Also strips common spec tokens (8GB, 128GB, 5G) that dilute retailer search.
 
     e.g. 'OnePlus Buds 3 TWS Earbuds with 49dB ANC, Hi-Res Audio, ...' → 'OnePlus Buds 3'
     """
@@ -511,8 +629,88 @@ def _safe_search_term(title: str, max_words: int = 5) -> str:
             break
     # Keep only alphanumeric, spaces, +, and basic punctuation safe for URLs
     name = _re.sub(r'[^\w\s+]', ' ', name)
-    words = name.split()
+    # Strip spec tokens that break retailer search engines
+    spec_pattern = _re.compile(
+        r'\b(\d+gb|\d+tb|\d+mah|\d+hz|\d+w|buy|online|india|price|review|best|new|official)\b',
+        _re.IGNORECASE
+    )
+    words = [w for w in name.split() if not spec_pattern.fullmatch(w)]
     return ' '.join(words[:max_words]).strip()
+
+
+def _extract_asin(url: str) -> str | None:
+    """
+    Extract Amazon ASIN from a URL containing /dp/XXXXXXXXXX.
+    Returns the 10-char ASIN if found, else None.
+    """
+    match = re.search(r'/dp/([A-Za-z0-9]{10})(?:[/?]|$)', url)
+    return match.group(1) if match else None
+
+
+def _build_product_link(raw_link: str, title: str, source: str) -> str:
+    """
+    Build a clean, direct product URL.
+
+    Only rewrites the link when it is a Google Shopping redirect
+    (ibp=oshop / google.com), a generic Cashify category page, or
+    a bare '#'. Otherwise returns raw_link unchanged.
+
+    For Amazon: prefers /dp/ASIN direct link over search page.
+    For Flipkart: uses direct product path when valid.
+    All other retailers: short search term (brand + model, 4 words max).
+    """
+    import urllib.parse
+
+    source_lower = source.lower()
+
+    # Detect if rewrite is needed
+    is_generic_cashify = (
+        "cashify" in source_lower
+        and ("find-new" in raw_link or raw_link.endswith("buy-refurbished-mobile-phones"))
+    )
+    needs_rewrite = (
+        "ibp=oshop" in raw_link
+        or "google.com" in raw_link
+        or is_generic_cashify
+        or raw_link == "#"
+    )
+    if not needs_rewrite:
+        return raw_link
+
+    # Build short search term (brand + model tokens only)
+    search_term = _safe_search_term(title, max_words=4)
+    safe_short = urllib.parse.quote_plus(search_term)
+
+    if "amazon" in source_lower:
+        asin = _extract_asin(raw_link)
+        if asin:
+            return f"https://www.amazon.in/dp/{asin}"
+        return f"https://www.amazon.in/s?k={safe_short}"
+
+    if "flipkart" in source_lower:
+        # Use the raw Flipkart product URL if it's a real product path
+        if "flipkart.com" in raw_link and "ibp=oshop" not in raw_link and "/search" not in raw_link:
+            return raw_link
+        return f"https://www.flipkart.com/search?q={safe_short}"
+
+    if "reliance" in source_lower:
+        return f"https://www.reliancedigital.in/search?q={safe_short}:relevance"
+    if "croma" in source_lower:
+        return f"https://www.croma.com/searchB?q={safe_short}"
+    if "vijay sales" in source_lower:
+        return f"https://www.vijaysales.com/search/{safe_short}"
+    if "jiomart" in source_lower:
+        safe_source = urllib.parse.quote_plus(source)
+        return f"https://duckduckgo.com/?q=%21ducky+{safe_short}+{safe_source}"
+    if "tata cliq" in source_lower:
+        return f"https://www.tatacliq.com/search/?searchCategory=all&text={safe_short}"
+    if "cashify" in source_lower:
+        full_title_enc = urllib.parse.quote_plus(title)
+        return f"https://duckduckgo.com/?q=%21ducky+{full_title_enc}+site%3Acashify.in"
+
+    # Generic fallback: DuckDuckGo I'm Feeling Lucky
+    safe_source = urllib.parse.quote_plus(source)
+    return f"https://duckduckgo.com/?q=%21ducky+{safe_short}+{safe_source}"
 
 
 # ── Tier 1: Serper.dev ────────────────────────────────────────────────────────
@@ -543,44 +741,12 @@ def _parse_serper_response(
         if not _is_relevant(title, category):
             continue
 
-        # Fix broken 'ibp=oshop' links by routing directly to the storefront
-        raw_link = item.get("link", "#")
-        source_lower = item.get("source", "").lower()
-
-        # Catch generic category pages from Cashify (e.g., /find-new-smart-tv)
-        is_generic_cashify = "cashify" in source_lower and ("find-new" in raw_link or raw_link.endswith("buy-refurbished-mobile-phones"))
-
-        if "ibp=oshop" in raw_link or "google.com" in raw_link or is_generic_cashify:
-            import urllib.parse
-            # Use a concise search term (not the full verbose title)
-            search_term = _safe_search_term(title, max_words=5)
-            safe_title  = urllib.parse.quote_plus(title)        # full title for Amazon/Flipkart
-            # Use percent-encoding (%20) instead of + for stores that break on +
-            safe_short  = urllib.parse.quote(search_term)       
-
-            if "amazon" in source_lower:
-                raw_link = f"https://www.amazon.in/s?k={safe_title}"
-            elif "flipkart" in source_lower:
-                raw_link = f"https://www.flipkart.com/search?q={safe_title}"
-            elif "reliance" in source_lower:
-                raw_link = f"https://www.reliancedigital.in/search?q={safe_short}:relevance"
-            elif "croma" in source_lower:
-                raw_link = f"https://www.croma.com/searchB?q={safe_short}"
-            elif "vijay sales" in source_lower:
-                raw_link = f"https://www.vijaysales.com/search/{safe_short}"
-            elif "jiomart" in source_lower:
-                # JioMart's search often breaks with %20. Fallback to DuckDuckGo for stability.
-                safe_source = urllib.parse.quote_plus(item.get("source", ""))
-                raw_link = f"https://duckduckgo.com/?q=%21ducky+{safe_title}+{safe_source}"
-            elif "tata cliq" in source_lower:
-                raw_link = f"https://www.tatacliq.com/search/?searchCategory=all&text={safe_short}"
-            elif "cashify" in source_lower:
-                # Force DuckDuckGo to find the exact product page on Cashify
-                raw_link = f"https://duckduckgo.com/?q=%21ducky+{safe_title}+site%3Acashify.in"
-            else:
-                # Fallback: DuckDuckGo I'm Feeling Lucky — use short term for cleaner redirect
-                safe_source = urllib.parse.quote_plus(item.get("source", ""))
-                raw_link = f"https://duckduckgo.com/?q=%21ducky+{safe_short}+{safe_source}"
+        # Build a clean product link (fixes ibp=oshop and generic category pages)
+        raw_link = _build_product_link(
+            raw_link=item.get("link", "#"),
+            title=title,
+            source=item.get("source", ""),
+        )
 
         products.append({
             "title":            title,
@@ -597,7 +763,7 @@ def _parse_serper_response(
     return _deduplicate(products)
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
+@retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=3))
 def _call_serper(
     query: str,
     max_price: float | None = None,
@@ -619,14 +785,21 @@ def _call_serper(
     raw = r.json()
     results = _parse_serper_response(raw, query=query, max_price=max_price, category=category)
 
-    # Quality gate: if enough rated results exist, drop zero-signal products
-    # (no rating AND no reviews) — they're usually irrelevant or spare-part listings.
+    # Soft quality gate: only drop zero-signal products when there are enough
+    # rated results AND rated results constitute at least 60% of the total.
+    # This prevents niche categories from losing their only valid listings.
     rated = [p for p in results if p["rating"] > 0 or p["review_count"] > 0]
-    if len(rated) >= 5:
-        dropped = len(results) - len(rated)
-        if dropped:
-            logger.info(f"Quality gate: dropped {dropped} zero-signal products")
+    unrated = [p for p in results if p not in rated]
+
+    if len(rated) >= 5 and len(rated) >= len(results) * 0.6:
+        if unrated:
+            logger.info(
+                f"Quality gate: dropped {len(unrated)} zero-signal products "
+                f"({len(rated)} rated remain)"
+            )
         return rated
+
+    # Soft gate: keep unrated results if we'd be left with too few
     return results
 
 
@@ -662,6 +835,7 @@ def _call_groq_search(
         raise ValueError("Groq did not return a JSON array")
 
     raw_products = json.loads(match.group())
+    import urllib.parse as _urlparse
     normalised = []
     for p in raw_products:
         price = float(p.get("price_inr") or p.get("price") or 0)
@@ -672,13 +846,24 @@ def _call_groq_search(
         title = str(p.get("title", "Unknown"))
         if not _is_relevant(title, category):
             continue
+        source = str(p.get("source", "Web"))
+        source_lower = source.lower()
+        short = _safe_search_term(title, max_words=4)
+        safe_short = _urlparse.quote_plus(short)
+        if "amazon" in source_lower:
+            link = f"https://www.amazon.in/s?k={safe_short}"
+        elif "flipkart" in source_lower:
+            link = f"https://www.flipkart.com/search?q={safe_short}"
+        else:
+            safe_source = _urlparse.quote_plus(source)
+            link = f"https://duckduckgo.com/?q=%21ducky+{safe_short}+{safe_source}"
         normalised.append({
             "title":           title,
             "price":           price,
             "rating":          _validate_rating(p.get("rating")),
             "review_count":    _validate_review_count(p.get("review_count")),
-            "source":          str(p.get("source", "Web")),
-            "link":            "#",
+            "source":          source,
+            "link":            link,
             "has_real_rating": p.get("rating") is not None,
         })
     return _deduplicate(normalised)
@@ -766,11 +951,31 @@ def search_agent(state: AgentState) -> dict:
                         1 for p in results
                         if any(s in p.get("source", "").lower() for s in ("amazon", "flipkart"))
                     )
-                    if top_stores < 2:
-                        logger.info("Fewer than 2 Amazon/Flipkart results — running supplemental search")
+                    is_apple = _is_apple_product_query(query)
+                    if top_stores < 2 and not is_apple:
+                        global _supplemental_search_count
+                        _supplemental_search_count += 1
+                        logger.info(
+                            f"Supplemental search #{_supplemental_search_count} triggered for query: '{query}'"
+                        )
                         try:
-                            supplemental_q = f"{query} amazon.in flipkart"
-                            extra = _call_serper(supplemental_q, max_price=max_price, category=category)
+                            # Use per-platform site: queries — avoids appending domain
+                            # names that break _enrich_query's enrichment logic.
+                            amazon_q = f"{query} site:amazon.in"
+                            flipkart_q = f"{query} site:flipkart.com"
+
+                            import concurrent.futures as _cf
+                            with _cf.ThreadPoolExecutor(max_workers=2) as _pool:
+                                fut_amz = _pool.submit(
+                                    _call_serper, amazon_q, max_price, category
+                                )
+                                fut_fk = _pool.submit(
+                                    _call_serper, flipkart_q, max_price, category
+                                )
+                                extra_amz = fut_amz.result(timeout=8)
+                                extra_fk = fut_fk.result(timeout=8)
+
+                            extra = extra_amz + extra_fk
                             extra = _affix_exclusion_check(query, extra)
                             existing_titles = {p["title"] for p in results}
                             added = 0
@@ -780,7 +985,10 @@ def search_agent(state: AgentState) -> dict:
                                     existing_titles.add(p["title"])
                                     added += 1
                             if added:
-                                logger.info(f"Supplemental search added {added} Amazon/Flipkart products")
+                                logger.info(
+                                    f"Supplemental search #{_supplemental_search_count} "
+                                    f"added {added} Amazon/Flipkart products"
+                                )
                         except Exception as e:
                             logger.warning(f"Supplemental Amazon/Flipkart search failed: {e}")
 

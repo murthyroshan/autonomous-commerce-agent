@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useState, useRef, type FormEvent, type KeyboardEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface SearchBarProps {
@@ -11,6 +11,19 @@ interface SearchBarProps {
 export function SearchBar({ onSearch, loading }: SearchBarProps) {
   const [value, setValue] = useState('')
   const [detonating, setDetonating] = useState(false)
+  // Debounce ref for onChange side effects (e.g., suggestions). 400ms delay.
+  const debounceRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleChange = (val: string) => {
+    // Clear any pending debounced action
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    // Schedule future side effect (placeholder for autocomplete/suggestions)
+    debounceRef.current = setTimeout(() => {
+      // Side effects (e.g., suggestions API call) would go here
+    }, 400)
+    // Update controlled input immediately
+    setValue(val)
+  }
 
   function triggerSearch() {
     const trimmed = value.trim()
@@ -78,7 +91,7 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
         id="search-input"
         type="text"
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Find the best gaming laptop under ₹80,000..."
         disabled={loading}
