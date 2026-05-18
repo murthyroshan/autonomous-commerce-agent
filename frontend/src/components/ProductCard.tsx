@@ -99,6 +99,11 @@ export function ProductCard({
   const [explorerUrl, setExplorerUrl] = useState<string | null>(null)
   const [contractUrl, setContractUrl] = useState<string | null>(null)
   const [nftUrl, setNftUrl] = useState<string | null>(null)
+  const [escrowAction, setEscrowAction] = useState<
+    'idle' | 'confirming' | 'delivered' | 'refunding' | 'refunded' | 'error'
+  >('idle')
+  const [escrowActionError, setEscrowActionError] = useState<string | null>(null)
+  const [appId, setAppId] = useState<number | null>(null)
 
   const { address, connected, connect, signTransaction, disconnect } = usePeraWallet()
 
@@ -137,6 +142,50 @@ export function ProductCard({
     score: product.score ?? 0,
   }
 
+  async function handleConfirmDelivery() {
+    if (!appId) return
+    setEscrowAction('confirming')
+    try {
+      const res = await fetch(`${API}/api/escrow/confirm_delivery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: 'demo', app_id: appId }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setEscrowAction('delivered')
+      } else {
+        setEscrowActionError(data.error || 'Delivery confirmation failed')
+        setEscrowAction('error')
+      }
+    } catch (e) {
+      setEscrowActionError('Network error')
+      setEscrowAction('error')
+    }
+  }
+
+  async function handleRefund() {
+    if (!appId) return
+    setEscrowAction('refunding')
+    try {
+      const res = await fetch(`${API}/api/escrow/refund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: 'demo', app_id: appId }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setEscrowAction('refunded')
+      } else {
+        setEscrowActionError(data.error || 'Refund failed')
+        setEscrowAction('error')
+      }
+    } catch (e) {
+      setEscrowActionError('Network error')
+      setEscrowAction('error')
+    }
+  }
+
   async function handleConfirm() {
     let connectAddress = address
     if (!connected) {
@@ -171,6 +220,7 @@ export function ProductCard({
           setExplorerUrl(fallbackData.explorer_url ?? `https://lora.algokit.io/testnet/transaction/${fallbackData.tx_id}`)
           if (fallbackData.contract_url) setContractUrl(fallbackData.contract_url)
           if (fallbackData.nft_url) setNftUrl(fallbackData.nft_url)
+          setAppId(fallbackData.app_id || null)
           setConfirmState('done')
         } else if (fallbackData.success) {
           setConfirmState('local')
@@ -212,6 +262,7 @@ export function ProductCard({
         setExplorerUrl(data.explorer_url ?? `https://lora.algokit.io/testnet/transaction/${data.tx_id}`)
         if (data.contract_url) setContractUrl(data.contract_url)
         if (data.nft_url) setNftUrl(data.nft_url)
+        setAppId(data.app_id || null)
         setConfirmState('done')
       } else if (data.tx_id) {
         setTxId(data.tx_id)
@@ -654,6 +705,87 @@ export function ProductCard({
                   </a>
                 )}
               </div>
+            )}
+
+            {/* Escrow actions — only shown when escrow is deployed */}
+            {contractUrl && appId && escrowAction === 'idle' && (
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={handleConfirmDelivery}
+                  className="flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all"
+                  style={{
+                    background: 'rgba(16,185,129,0.1)',
+                    color: '#34d399',
+                    border: '1px solid rgba(16,185,129,0.25)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(16,185,129,0.18)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(16,185,129,0.1)'
+                  }}
+                >
+                  ✓ Confirm Delivery
+                </button>
+                <button
+                  onClick={handleRefund}
+                  className="flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all"
+                  style={{
+                    background: 'rgba(239,68,68,0.08)',
+                    color: '#f87171',
+                    border: '1px solid rgba(239,68,68,0.2)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(239,68,68,0.15)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(239,68,68,0.08)'
+                  }}
+                >
+                  ↩ Cancel & Refund
+                </button>
+              </div>
+            )}
+
+            {/* Loading states */}
+            {(escrowAction === 'confirming' || escrowAction === 'refunding') && (
+              <div
+                className="mt-2 w-full rounded-xl px-4 py-2 text-center text-xs animate-pulse"
+                style={{ background: 'rgba(39,39,42,0.6)', color: '#71717a',
+                         border: '1px solid #333' }}
+              >
+                {escrowAction === 'confirming'
+                  ? 'Confirming delivery on Algorand...'
+                  : 'Processing refund on Algorand...'}
+              </div>
+            )}
+
+            {/* Final states */}
+            {escrowAction === 'delivered' && (
+              <div
+                className="mt-2 w-full rounded-xl px-4 py-2 text-center text-xs font-semibold"
+                style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399',
+                         border: '1px solid rgba(16,185,129,0.3)' }}
+              >
+                ✓ Delivery Confirmed on Algorand
+              </div>
+            )}
+
+            {escrowAction === 'refunded' && (
+              <div
+                className="mt-2 w-full rounded-xl px-4 py-2 text-center text-xs font-semibold"
+                style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171',
+                         border: '1px solid rgba(239,68,68,0.25)' }}
+              >
+                ↩ Refund Processed on Algorand
+              </div>
+            )}
+
+            {escrowAction === 'error' && escrowActionError && (
+              <p className="mt-1 text-center text-[10px]"
+                 style={{ color: '#ef4444' }}>
+                {escrowActionError}
+              </p>
             )}
           </div>
         )}

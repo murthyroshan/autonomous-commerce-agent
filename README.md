@@ -1,165 +1,312 @@
-# 🚀 KartIQ: Autonomous Commerce Agent
-> Zero-friction autonomous commerce. Discover, evaluate, and securely execute Web3 transactions via a unified, multi-modal AI pipeline.
+# KartIQ — Autonomous Commerce Agent
 
-# 📌 The Proposition
-The modern e-commerce experience is broken by scale. Consumers suffer severe decision fatigue attempting to decode disjointed search algorithms, fabricated reviews, and subjective pricing manipulation. 
+> Natural language → live Indian e-commerce search → deterministic
+> scoring → AI recommendation → Algorand-signed purchase intent →
+> x402 agentic payment. One pipeline, streamed in real time.
 
-**KartIQ resolves this by fully automating the discovery, evaluation, and execution lifecycle.**
+## 🛒 What Is This
 
-It functions as a strict autonomous pipeline intersecting natural language processing, predictive market mapping, and decentralized finance. KartIQ retrieves live structured data, objectively normalizes ranking metrics mathematically, dictates an unbiased recommendation, and securely finalizes the checkout through an immutable Algorand-backed escrow payload.
+KartIQ takes a natural-language query and runs a full three-stage pipeline: a 3-tier search agent that pulls live Indian e-commerce data and never returns empty, a deterministic min-max scoring engine that produces reproducible rankings without LLM involvement, and a Groq LLM that explains — but cannot fabricate — those rankings. Results stream to the browser in real time via Server-Sent Events as each agent completes.
 
-# 🧠 Core Concept: The Autonomous Commerce Protocol
-An **Autonomous Commerce Agent** shifts the paradigm from *assistive AI* to *executing AI*. 
+Every confirmed purchase creates two verifiable records on Algorand testnet: a PaymentTxn with a structured JSON note (purchase intent log) and a PyTeal smart-contract escrow that holds funds until the buyer confirms delivery. An Algorand Standard Asset is minted as an NFT receipt encoding the product title, INR price, and transaction ID. None of this is simulated — the transactions are on-chain.
 
-Rather than serving endless pagination and disorganized external links, the agent interprets complex constraints—such as *"Find the best 4K monitor for color grading under $500"*—and executes the raw operational labor. It aggregates unstructured data, normalizes the statistics, synthesizes a definitive conclusion, and initiates a cryptographic transaction. It collapses the buyer's journey from a prolonged, manual funnel into a singular, mathematically justified action.
+KartIQ also implements the x402 agentic payment protocol — the HTTP 402 "Payment Required" status code, now activated for machine use. A gated endpoint returns a PAYMENT-REQUIRED header; the frontend decodes it, builds a USDC transfer (ASA 10458941) via algosdk v3, signs it through Pera Wallet, and the GoPlausible facilitator settles it on-chain. Any AI agent can pay for a KartIQ search session using USDC without an account, OAuth, or human intervention.
 
-# ⚙️ Platform Capabilities
-- **Deterministic Intent Analysis:** Translates abstract natural language queries into strict functional and budgetary bounds utilizing Llama 3 logic parsing.
-- **Live Market Telemetry:** Ingests unstructured search topologies and live market data across domains via Serper capabilities.
-- **Zero-Bias Normalization Engine:** Employs a zero-trust Min-Max scalar algorithm that mathematically enforces price-to-performance indexing prior to LLM evaluation.
-- **Explainable AI (XAI) Justification:** Forces the LLM to strictly defend algorithmic outputs without granting it permission to fabricate underlying numerical data topologies.
-- **Immutable Audit Logging:** Commits verifiable intent-to-purchase hashes natively to the Algorand testnet ledger to establish strict historical provenance.
-- **Trustless Algorand Checkout:** Decentralized financial rails bridging AI autonomy with strict cryptographic user-consent boundaries via WalletConnect.
-- **Asynchronous Pipeline Streaming:** Low-latency Server-Sent Events (SSE) pipeline architecture delivering sub-second execution state shifts directly to the interactive client.
+## 🔍 Try These Queries
 
-# 🏗️ System Architecture
-KartIQ relies on a decoupled, pipeline-driven architecture engineered for high concurrency and strict node modularity.
+| Query | What it demonstrates |
+|---|---|
+| `MacBook M3` | Specific model search — direct product links, scoring, AI reasoning |
+| `OnePlus 13 vs Samsung S25` | VS Battle Mode — dual parallel search, head-to-head report |
+| `wireless earbuds under ₹1,500` | Budget negotiation — surfaces nearest option with "Worth the stretch?" nudge |
 
-- **Presentation Layer (Frontend):** A high-performance, edge-ready Next.js 14 application leveraging Tailwind CSS and Framer Motion. It acts as the consumption layer for the asynchronous SSE streams and explicitly handles the Pera Wallet integration layer.
-- **API Control Plane (Backend):** A robust FastAPI and Uvicorn server orchestrating asynchronous subroutines and exposing strictly-typed, validated Pydantic data schemas.
-- **Agent Mesh (AI Layer):** A sequential, LangGraph-inspired state machine composing three highly specialized nodes:
-  - `search_agent`: Mangles semantic intent into structured search parameters and sanitizes live market telemetry.
-  - `compare_agent`: Handles scalar computational normalization over arrays (0–1 baseline).
-  - `decision_agent`: Uses the Groq LLM endpoint to execute deterministic recommendations strictly against normalized vectors.
-- **Web3 Settlement Layer (Blockchain):** A testnet interface built on `py-algorand-sdk` and the AlgoNode RPC for generating, encoding, and broadcasting secure payload transactions.
+## 📸 Screenshots
 
-# ⛓️ Blockchain Integration: The Financial Rail for Autonomy
-Allowing an AI agent to execute purchases necessitates impenetrable security boundaries. The Algorand integration acts as the fundamental financial rail for this autonomy.
-- **The Web3 Necessity:** Traditional APIs require storing highly sensitive credit card data. Cryptographic signing empowers the AI to structure a secure intent, while the user strictly maintains private key control on their mobile device. 
-- **Smart Contract Escrow Concepts:** By generating raw binary `PaymentTxn` packets, funds can be temporarily locked in a decentralized escrow state until order fulfillment is mathematically proven.
-- **Permissioned Autonomy:** The Pera Wallet integration completely sandboxes the AI pipeline. The agent proposes the optimal allocation; the user cryptographically authorizes the execution. 
-- **Execution Flow:** Frontend payload parameters -> Backend transaction synthesis -> Encoded msgpack base64 pushed to Client -> Signed via Pera Mobile SDK -> Network propagation at the node level.
+![Search results with scoring](docs/screenshots/search-results.png)
+*Search results — score bar, verdict badge, holographic winner card, AI reasoning panel*
 
-# 🛠️ Tech Stack
-- **Languages:** TypeScript, Python 3.11
-- **Frontend Ecosystem:** Next.js 14, React, Tailwind CSS, Framer Motion
-- **Backend Ecosystem:** FastAPI, Uvicorn, Pydantic, asyncio
-- **AI/LLM Infrastructure:** Groq Developer API (`llama-3.3-70b-versatile`)
-- **Market Data:** Serper.dev (Live Google Shopping API)
-- **Web3 / Blockchain:** Algorand Testnet, `py-algorand-sdk`, `@perawallet/connect`
+![x402 payment flow](docs/screenshots/x402-payment.png)
+*x402 USDC payment — PAYMENT-REQUIRED header decoded, Pera Wallet signing, settlement tx ID*
 
-# 📂 Project Structure
+![Algorand confirmation](docs/screenshots/algorand-confirm.png)
+*Post-purchase — transaction link, smart contract escrow, NFT proof of purchase, Confirm Delivery / Cancel & Refund*
+
+![Battle Arena](docs/screenshots/battle-arena.png)
+*VS Battle Mode — OnePlus 13 vs Samsung S25, head-to-head scoring report*
+
+## ✨ Feature Highlights
+
+### Search & AI
+| Feature | Detail |
+|---|---|
+| 3-tier fallback | Serper.dev Google Shopping → Groq compound web search → curated mock data. Never returns empty. |
+| Query enrichment | Category noun injection, India buy-intent suffix, Apple-specific rewriting (e.g. "MacBook M3" → "Apple MacBook Air M3 price in India buy online") |
+| Affix exclusion | Deterministic regex: "OnePlus 12" never returns "OnePlus 12R" or "OnePlus 12 Pro". Safety net returns unfiltered list if filter would produce zero results. |
+| Filters | Cross-category contamination, accessory filter, price sanity per category with brand-specific floors |
+| Budget negotiation | If nothing found under budget, surfaces nearest above-budget option with overage % and "Worth the stretch?" nudge |
+| Link quality | ASIN extraction for direct Amazon /dp/ links. All links validated https:// before rendering. |
+| Quality gate | Zero-signal products dropped only when rated results ≥ 60% of total |
+| Cache | In-process LRU, 500 entries, 1-hour TTL |
+| Supplemental pass | site:amazon.in + site:flipkart.com operators when major retailers underrepresented (skipped for Apple queries) |
+| Battle mode | VS queries run dual parallel searches, pin best-matching product per side via Jaccard similarity, generate head-to-head report |
+
+### Scoring Engine
+| Feature | Detail |
+|---|---|
+| Weights | Price 0.45× (inverted), rating 0.35× (confidence-adjusted), reviews 0.20× (log-normalized) |
+| Confidence adjustment | Products with < 30 reviews are penalized |
+| Store trust tiers | Official Store 1.12×, Trusted Retailer 1.06×, Unverified 0.88× |
+| Price anomaly detection | Listings > 40% below category median flagged "Suspicious Listing" |
+| User preference boosts | Preferred brand 1.08×, preferred source 1.04×; avoided brands and max price are hard eliminations |
+| Deal verdicts | Excellent Deal / Good Value / Fair Price / Overpriced mapped to score ranges with colour coding |
+| Badges | Best Value, Most Reviewed, Top Rated, Budget Pick, Premium Pick, Low Confidence, Penalized Rating |
+
+### Blockchain & Payments
+| Feature | Detail |
+|---|---|
+| Phase 4 | PaymentTxn with structured JSON note: product title, INR price, query, receipt number |
+| Phase 5 | PyTeal escrow LogicSig — validates note != "", amount > 0, receiver == ALGORAND_RECEIVER |
+| Escrow actions | Buyer can Confirm Delivery or Cancel & Refund from the product card or history page |
+| NFT receipt | ASA minted per confirmed purchase encoding product metadata and tx ID |
+| x402 gate | HTTP 402 on GET /api/v1/x402/initiate. USDC ASA 10458941 (Algorand testnet). GoPlausible facilitator. |
+| Wallet | Pera Wallet via @perawallet/connect + WalletConnect v2. 4100-error guard with 3s reconnect-retry. |
+| Explorer | All links point to lora.algokit.io and testnet.explorer.perawallet.app |
+
+### Frontend & UX
+| Feature | Detail |
+|---|---|
+| Streaming | SSE with per-agent status events, 30s timeout guard, esRef race-condition prevention |
+| Product cards | 3D tilt (react-parallax-tilt), holographic foil on winner, score bar, verdict badge, AI reasoning panel |
+| Skeleton loaders | 3 placeholder cards during loading, min-h-[280px] prevents layout shift |
+| Battle Arena | Animated VS layout for comparison queries |
+| Social proof | Reddit + YouTube sentiment via Serper. Live/mock flag shown in UI. |
+| Performance | Three.js code-split (ssr: false), route prefetch on search CTA hover |
+| Other | Custom cursor, share page with score arc, price watchlist with APScheduler 24h checks |
+
+## 🏗️ System Architecture
+
 ```text
-autonomous-commerce-agent/
-├── agents/             # AI Pipeline Logic & State Machine Subroutines
-│   ├── compare_agent.py   # Statistical scalar normalization implementation
-│   ├── decision_agent.py  # Groq LLM evaluation & XAI formatting
-│   ├── pipeline.py        # Central sequence orchestration
-│   └── search_agent.py    # Search query proxying and DOM data extraction
-├── api/                # Backend API Implementation
-│   ├── main.py            # FastAPI Entrypoint & Middleware bindings
-│   ├── models.py          # Pydantic Schemas for I/O validation
-│   └── routes.py          # SSE Streaming & Rest API endpoints
-├── blockchain/         # Web3 Network Layer
-│   └── algorand.py        # Transaction bytecode generation & TxN broadcast
-├── frontend/           # Presentation Layer Virtual DOM
-│   ├── src/app            # Next.js Server Components & App Router
-│   ├── src/components     # Complex Interactive Client Components
-│   └── src/hooks          # State Management for Web3 Client SDKs
-└── tests/              # Pytest verification and integration suites
+User Query (natural language)
+│
+▼
+Next.js 16 Frontend
+┌─────────────────────────────────────────────┐
+│  EventSource → SSE stream                   │
+│  ProductCard (3D tilt, holographic winner)  │
+│  Battle Arena (VS mode)                     │
+│  Pera Wallet (WalletConnect v2)             │
+└────────────────┬────────────────────────────┘
+│  GET /api/search/stream
+▼
+FastAPI + Uvicorn (Python 3.11)
+┌──────────────────────────────────────────────────────┐
+│  AgentState — only shared data bus between agents    │
+│  Agents never call each other directly               │
+│                                                      │
+│  ┌─────────────────┐                                 │
+│  │  search_agent   │  Serper → Groq → mock           │
+│  │                 │  Enrich · Filter · Dedupe        │
+│  └────────┬────────┘                                 │
+│           │ search_results[]                         │
+│  ┌────────▼────────┐                                 │
+│  │  compare_agent  │  Min-max · Trust · Anomaly       │
+│  └────────┬────────┘                                 │
+│           │ scored_products[]                        │
+│  ┌────────▼────────┐                                 │
+│  │  decision_agent │  Groq LLM — explain, not invent │
+│  └────────┬────────┘                                 │
+└───────────┼──────────────────────────────────────────┘
+│  SSE: status → products → recommendation
+▼
+POST /api/confirm/submit → Algorand Testnet
+┌──────────────────────────────────────────────────────┐
+│  Phase 4: PaymentTxn + JSON note                     │
+│  Phase 5: PyTeal LogicSig escrow                     │
+│  NFT receipt: ASA minted with product metadata       │
+│  Confirm Delivery / Cancel & Refund via escrow calls │
+└──────────────────────────────────────────────────────┘
+│
+▼
+GET /api/v1/x402/initiate → x402 Payment Gate
+┌──────────────────────────────────────────────────────┐
+│  HTTP 402 + base64 PAYMENT-REQUIRED header           │
+│  Frontend builds USDC axfer (ASA 10458941)           │
+│  GoPlausible facilitator verifies on-chain           │
+│  PAYMENT-RESPONSE header → tx ID shown in UI        │
+└──────────────────────────────────────────────────────┘
+
+→  data flow          [ ]  processing layer
+All agent communication is through AgentState only.
+Agents never call each other directly.
 ```
 
-# ⚡ Getting Started
+## 🔗 Live Blockchain Proof
 
-## Prerequisites
-- Node.js v18+
+Every confirmed purchase creates three verifiable records on Algorand testnet. Here are two real purchases made during development.
+
+### MacBook Air M4 — ₹1,03,800 · 18 May 2026
+
+| Record | Link |
+|---|---|
+| Purchase Transaction | [YTLY76TE7QQ5DISV3QFN6FN4LYQZBPR4FIWQWYPFYXZMTXPHOTYQ ↗](https://testnet.explorer.perawallet.app/tx/YTLY76TE7QQ5DISV3QFN6FN4LYQZBPR4FIWQWYPFYXZMTXPHOTYQ/) |
+| Smart Contract Escrow | [Application 762738486 ↗](https://testnet.explorer.perawallet.app/application/762738486/) |
+| NFT Proof of Purchase | [ASA 762738543 ↗](https://testnet.explorer.perawallet.app/asset/762738543/) |
+
+### Redmi Watch 5 Active — ₹1,999 · 17 May 2026
+
+| Record | Link |
+|---|---|
+| Purchase Transaction | [JDXBKOBWVNELYCRSPMXP4A65AJ2OOAN5AY6J4DTVJIBKSD5C7VOQ ↗](https://testnet.explorer.perawallet.app/tx/JDXBKOBWVNELYCRSPMXP4A65AJ2OOAN5AY6J4DTVJIBKSD5C7VOQ/) |
+| Smart Contract Escrow | [Application 762674841 ↗](https://testnet.explorer.perawallet.app/application/762674841/) |
+| NFT Proof of Purchase | [ASA 762674850 ↗](https://testnet.explorer.perawallet.app/asset/762674850/) |
+
+Each purchase creates a PaymentTxn note, a PyTeal escrow contract, and an NFT receipt ASA — all verifiable on the Algorand testnet explorer without any account.
+
+## ⚡ x402 Agentic Payments
+
+x402 activates the HTTP 402 status code for machine-to-machine payments. When an AI agent hits GET /api/v1/x402/initiate, the server responds with 402 and a base64-encoded PAYMENT-REQUIRED header describing the USDC amount and recipient. The agent decodes this, constructs an ASA 10458941 transfer using algosdk v3, and signs it via Pera Wallet. The GoPlausible facilitator verifies the ed25519 signature and settles on-chain. The 200 response then carries the settlement tx ID in a PAYMENT-RESPONSE header.
+
+This matters because it removes every human-facing authentication primitive from the payment flow. No API key registration. No OAuth callback. No stored card. An agent discovers what payment is required from the HTTP response itself, pays with USDC, and gets the resource. KartIQ is both sides of this: a resource server that sells search results, and a consumer that can pay for them autonomously.
+
+## 🛠️ Tech Stack
+
+| Layer | Technologies |
+|---|---|
+| Backend | Python 3.11, FastAPI, Uvicorn, Pydantic v2, asyncio, slowapi, APScheduler |
+| AI / LLM | Groq API — llama-3.3-70b-versatile, fallback llama3-8b-8192 |
+| Search | Serper.dev Google Shopping API |
+| Blockchain | Algorand Testnet, py-algorand-sdk, PyTeal, AlgoNode RPC |
+| Payments | x402 protocol, USDC ASA 10458941, GoPlausible facilitator |
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS v4, Framer Motion 12, Three.js, algosdk v3 |
+| Wallet | Pera Wallet via @perawallet/connect + WalletConnect v2 |
+
+## 🚀 Getting Started
+
+> **Minimum to run (no blockchain):** Set `SERPER_API_KEY` and `GROQ_API_KEY` only. Everything else is optional.
+> **Fully offline:** Set `MOCK_ONLY=true` — no API keys needed at all.
+
+### Prerequisites
+
 - Python 3.11+
-- Groq API Key
-- Serper.dev API Key
+- Node.js 18+
+- Serper.dev API key (free, no credit card)
+- Groq API key (free)
+- Algorand testnet account (blockchain features only)
+- WalletConnect Cloud project ID (prevents Pera Wallet QR errors)
 
-## Local Installation
+### Installation
 
-1. **Clone the repository:**
 ```bash
 git clone https://github.com/murthyroshan/autonomous-commerce-agent.git
 cd autonomous-commerce-agent
-```
 
-2. **Initialize the Backend Context:**
-```bash
 python -m venv venv
-source venv/bin/activate
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS / Linux
 pip install -r requirements.txt
+
+cd frontend && npm install && cd ..
 ```
 
-3. **Initialize the Frontend Context:**
-```bash
-cd frontend
-npm install
-cd ..
-```
-
-## Environment Configuration
-Create a `.env` file in the root based strictly on `.env.example`:
+### Environment Variables
 
 ```env
-GROQ_API_KEY=your_groq_api_key
-SERPER_API_KEY=your_serper_api_key
-ALGORAND_MNEMONIC=your_testnet_wallet_mnemonic
-ALGORAND_RECEIVER=your_receiving_testnet_address
+# Required: core search and AI
+SERPER_API_KEY=your_serper_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
+
+# Required: Algorand blockchain (Phase 4+)
+ALGORAND_MNEMONIC=word1 word2 ... word25
+ALGORAND_RECEIVER=your_algorand_testnet_address
+
+# x402 payments
+KARTIQ_MERCHANT_WALLET=your_algorand_testnet_address
+FACILITATOR_URL=https://facilitator.goplausible.xyz
+ALGORAND_NETWORK=testnet
+
+# Frontend
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_walletconnect_project_id
+
+# Optional
 MOCK_ONLY=false
+API_SECRET_KEY=your_secret_here
+FRONTEND_ORIGIN=http://localhost:3000
+THREAD_POOL_SIZE=20
+PREWARM_QUERIES=gaming laptop under 80000,best phone under 30000
 ```
 
-## Running the Platform
+### Run
 
-Boot the core API plane:
 ```bash
+# Terminal 1 — backend
 uvicorn api.main:app --reload --port 8000
+
+# Terminal 2 — frontend
+cd frontend && npm run dev
+# → http://localhost:3000
 ```
 
-Boot the presentation layer (in an isolated terminal):
-```bash
-cd frontend
-npm run dev
+## 📡 API Reference
+
+Protected endpoints require X-API-Key header. Rate limits: search 15/min, confirm 10/min, all others 30/min.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | /api/health | Liveness check. No auth required. |
+| GET | /api/search/stream | SSE stream. Query param: q=. Emits status, product, recommendation events. |
+| POST | /api/search | Synchronous search. Body: {"query": string}. |
+| POST | /api/confirm | Phase 4 PaymentTxn purchase intent log. |
+| POST | /api/confirm/prepare | Build unsigned PyTeal escrow transaction for client-side signing. |
+| POST | /api/confirm/submit | Submit signed transaction. Deploys escrow, mints NFT receipt. |
+| GET | /api/v1/x402/initiate | x402 payment gate. Returns 402 + PAYMENT-REQUIRED header. |
+| POST | /api/escrow/confirm_delivery | Release escrow funds to merchant after delivery confirmed. |
+| POST | /api/escrow/refund | Refund escrowed funds to buyer. |
+| POST | /api/watchlist | Add product to 24h price-alert watchlist. |
+| GET | /api/history | Purchase history for session user. |
+
+## 🛡️ Security
+
+- **API key**: X-API-Key header only. Compared with hmac.compare_digest — no timing oracle.
+- **CORS**: localhost origins only added when NODE_ENV != "production"
+- **Rate limiting**: slowapi on every endpoint
+- **Mnemonic protection**: ALGORAND_MNEMONIC scrubbed from all exception traces before logging
+- **Transaction validation**: receiver address validated in both route handler and submit_signed_transaction() before any network call
+- **Path traversal**: _safe_user_id() on every file path. user_id hardcoded server-side ("demo"), never from user input.
+- **URI allowlist**: WatchlistAddRequest.link rejects javascript: and data: URIs
+- **Response hardening**: SearchResponse uses ConfigDict(extra="ignore"). All HTTPException details return "Internal server error".
+- **SSE timeout**: asyncio.wait_for 30s ceiling with clean error event on expiry
+
+## Project Structure
+
+```text
+autonomous-commerce-agent/
+├── agents/
+│   ├── state.py            # AgentState TypedDict — only shared data bus
+│   ├── search_agent.py     # 3-tier search, enrichment, filtering, LRU cache
+│   ├── compare_agent.py    # Min-max scoring, trust tiers, anomaly detection
+│   ├── decision_agent.py   # Groq LLM justification, battle mode
+│   ├── pipeline.py         # Wires agents — agents never call each other
+│   ├── memory.py           # Preferences, purchase history (JSONL)
+│   ├── watchlist.py        # APScheduler 24h price-alert job
+│   ├── social_proof.py     # Reddit + YouTube sentiment
+│   └── mock_data.py        # Curated fallback products
+├── api/
+│   ├── main.py             # FastAPI app, lifespan, CORS, rate limiter
+│   ├── routes.py           # All endpoints, SSE stream, x402 gate
+│   └── models.py           # Pydantic schemas
+├── blockchain/
+│   ├── algorand.py         # PaymentTxn, escrow, NFT mint, tx submit
+│   └── contract.py         # PyTeal LogicSig escrow contract
+├── frontend/
+│   └── src/
+│       ├── app/            # Next.js App Router pages
+│       ├── components/     # ProductCard, BattleArena, NavbarLogo…
+│       └── hooks/          # usePeraWallet, useAgentStream…
+├── .env.example
+└── requirements.txt
 ```
 
-# 🔌 API Integrations
-- **Groq API**: High-speed, edge-inference Llama 3 endpoint utilized strictly for deep intent analysis and human-readable rationale synthesis.
-- **Serper API**: Interacts sequentially with the Google Shopping DOM to retrieve and unmarshal live product topography metrics.
-- **AlgoNode RPC**: High-throughput public Algorand testnet connectivity ensuring stable contract compilation and sub-second transaction propagation.
+## License
 
-# 🤖 System Architecture Flow
-1. **Semantic Reception:** The user inputs abstract functional variables into the Next.js client.
-2. **State Injection:** The core API intercepts the variables and maps them into the synchronized `AgentState`.
-3. **Market Mapping:** The `search_agent` invokes Serper.dev algorithms, isolating top matches and automatically dropping erratic or irrelevant domain objects.
-4. **Computational Normalization:** The `compare_agent` evaluates the array natively using a `0-1` scalar normalization formula that aggressively inverts price weights and cascades review density metrics.
-5. **Final Matrix Evaluation:** The structured data is explicitly quarantined from LLM hallucination and passed to the `decision_agent`, which generates a semantic justification mapping algorithm variables to user constraints.
-6. **Asynchronous Presentation:** Real-time state updates cascade through the SSE pipeline directly causing staggered, high-framerate renders across the browser client.
-7. **Execution & Settlement:** A WalletConnect signature intent is securely routed to the user's mobile device. Upon cryptographic network signature, the final intent is committed permanently to the Algorand testnet ledger.
-
-# 🔐 Threat Abstraction & Verification
-The proposition of autonomous commerce demands zero-trust architecture. By hashing and storing purchase intents, numerical metadata configurations, and settled checkout payloads strictly on the Algorand ledger, KartIQ establishes a highly auditable, transparent state. This strictly guarantees that backend processes cannot subvert, modify, or disguise the rationale backing an AI's operational decision, ensuring absolute provenance.
-
-# 🚧 Architectural Challenges & Mitigations
-- **Challenge - LLM Numerical Hallucination:** Language models naturally fabricate non-existent product geometries or distort operational pricing to artificially satisfy user constraints.
-  - **Mitigation:** Strict execution segregation. The LLM is restricted completely to evaluating pre-computed statistical parameters and operates under a zero-permission policy regarding raw data generation.
-- **Challenge - Pera SDK Asynchronous State Desync:** WalletConnect capabilities frequently suffer from caching desynchronization across React hot-reloads resulting in ghost-connections.
-  - **Mitigation:** Authored explicit bypass logic inside the `usePeraWallet` hook to dodge React state closure latency and verify hardware-level `.connector` presence dynamically prior to any signature request.
-- **Challenge - High-Latency Scraping Pipelines:** Blocking user interactions while awaiting asynchronous web scraping creates intolerable UI/UX latency.
-  - **Mitigation:** Implemented a Server-Sent Events (SSE) pipeline establishing a persistent, uni-directional HTTP connection that yields modular JSON artifacts consecutively as individual LangGraph nodes finish computing.
-
-# 🔮 Innovation Roadmap
-- **Advanced Escrow Execution:** Transitioning simple Algorand `PaymentTxn` packets into full Turing-complete PyTeal ASC1 contract protocols holding programmatic capital until post-shipment logistics APIs fire.
-- **Adversarial Agent Networks:** Embedding multi-agent architectures that simulate internal debates—allowing a secondary 'Critic Agent' to challenge the 'Decision Agent' output to eliminate residual LLM biases.
-- **Proprietary Vendor Graphs:** Migrating away from generic DOM scraping towards proprietary integrations with Shopify Graph APIs or Amazon Web Services fulfillment environments for frictionless operational scale.
-
-# 🤝 Contribution Guidelines
-Engineering contributions scaling system capability are openly welcomed:
-1. Fork the baseline repository.
-2. Isolate your feature (`git checkout -b feature/ImplementationName`).
-3. Commit logical changes (`git commit -m 'Implement ImplementationName'`).
-4. Push to remote (`git push origin feature/ImplementationName`).
-5. Open an issue-referenced Pull Request.
-
-# 📜 License
-This architecture remains proprietary software actively belonging to its respective ownership. All rights explicitly reserved.
+MIT

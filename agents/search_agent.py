@@ -357,6 +357,14 @@ def _affix_exclusion_check(query: str, products: list[dict]) -> list[dict]:
     if not model_tokens:
         return products
     
+    # For Apple products, chip/model variants are always relevant —
+    # M3 Pro and M3 Max ARE valid results for "MacBook M3".
+    # Skip affix exclusion entirely for Apple queries.
+    apple_keywords = ['macbook', 'iphone', 'ipad', 'airpods', 'apple watch',
+                      'mac mini', 'imac']
+    if any(kw in query_lower for kw in apple_keywords):
+        return products
+
     for p in products:
         title_lower = p.get('title', '').lower()
         is_valid = True
@@ -470,6 +478,14 @@ _CATEGORY_QUERY_NOUN: dict[str, str] = {
 }
 
 
+def _is_apple_product_query(query: str) -> bool:
+    q = query.lower()
+    return any(brand in q for brand in [
+        'macbook', 'iphone', 'ipad', 'airpods', 'apple watch',
+        'mac mini', 'imac', 'mac pro', 'mac studio'
+    ])
+
+
 def _is_specific_model_query(query: str) -> bool:
     """
     Return True if the query refers to a specific product model or variant.
@@ -511,6 +527,29 @@ def _enrich_query(query: str, category: str = "default") -> str:
     # Already platform-targeted — leave alone
     if any(w in q for w in ['amazon', 'flipkart', 'site:']):
         return query
+
+    # Apple products need "Apple" prefix for Indian retailer indexing
+    if _is_apple_product_query(query):
+        q_lower = query.lower()
+        # Extract the chip generation if present (m1/m2/m3/m4 + variant)
+        chip_match = re.search(r'\b(m[1-4])\s*(pro|max|ultra)?\b', q_lower)
+        chip_str = chip_match.group(0).upper() if chip_match else ""
+        
+        # Build Apple-specific query: "Apple MacBook Air M3" style
+        if 'macbook' in q_lower:
+            variant = 'MacBook Pro' if 'pro' in q_lower else 'MacBook Air'
+            if chip_str:
+                base = f"Apple {variant} {chip_str}"
+            else:
+                base = f"Apple {variant}"
+        elif 'iphone' in q_lower:
+            base = f"Apple {query.replace('apple', '').replace('Apple', '').strip()}"
+        else:
+            # Generic Apple: just prepend "Apple" if not already there
+            base = f"Apple {query}" if 'apple' not in q_lower else query
+        
+        suffix = "price in India buy online"
+        return f"{base} {suffix}"
 
     # For specific-model queries, skip category noun entirely —
     # the model name is more precise than any generic noun
@@ -912,7 +951,8 @@ def search_agent(state: AgentState) -> dict:
                         1 for p in results
                         if any(s in p.get("source", "").lower() for s in ("amazon", "flipkart"))
                     )
-                    if top_stores < 2:
+                    is_apple = _is_apple_product_query(query)
+                    if top_stores < 2 and not is_apple:
                         global _supplemental_search_count
                         _supplemental_search_count += 1
                         logger.info(
