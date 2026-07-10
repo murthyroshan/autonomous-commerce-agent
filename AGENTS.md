@@ -180,7 +180,7 @@ When this file says Phase 1 is TODO, your next task is:
 
 - Flipkart has no public API. Products from Flipkart appear in Serper Google Shopping results organically — do not attempt direct Flipkart scraping.
 - Amazon PA-API requires affiliate approval. Use Serper Google Shopping instead.
-- Groq `llama-3.3-70b-versatile` is the primary LLM. If rate-limited, fall back to `llama3-8b-8192`.
+- Groq `llama-3.3-70b-versatile` is the primary LLM. If rate-limited, fall back to `llama-3.1-8b-instant` (the older `llama3-8b-8192` was decommissioned by Groq).
 - Algorand testnet faucet: https://testnet.algoexplorer.io/dispenser
 - Do not add ChromaDB or any vector database until Phase 6 and only if needed.
 - Do not implement WebSockets — SSE only.

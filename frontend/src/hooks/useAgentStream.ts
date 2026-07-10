@@ -106,6 +106,12 @@ export function useAgentStream(query: string | null) {
           query: data.query ?? query,
           scored_products: data.scored_products ?? [],
           recommendation: data.recommendation ?? null,
+          // Carry these through too — the SSE stream returns them, so the
+          // non-streaming fallback must as well, or the budget nudge and
+          // Battle Arena silently vanish whenever the stream drops.
+          budget_miss: data.budget_miss ?? null,
+          battle_contenders: data.battle_contenders ?? null,
+          battle_report: data.battle_report ?? null,
           error: data.error ?? null,
         })
         setStreamError(reason)

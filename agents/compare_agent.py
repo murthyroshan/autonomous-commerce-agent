@@ -257,7 +257,10 @@ def compare_agent(state: AgentState, user_id: str = "demo") -> dict:
 
         # Step 4: memory boosts (multiplicative — Feature 1.3)
         brand_matched  = any(b in product.get("title", "").lower() for b in preferred_brands)
-        source_matched = product.get("source", "").lower() in preferred_sources
+        # Substring match (like brand matching) so a saved pref "amazon" still
+        # matches a source reported as "Amazon.in".
+        product_source = product.get("source", "").lower()
+        source_matched = any(s in product_source for s in preferred_sources)
         brand_multiplier  = 1.08 if brand_matched  else 1.0
         source_multiplier = 1.04 if source_matched else 1.0
         base *= brand_multiplier * source_multiplier

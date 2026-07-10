@@ -493,7 +493,7 @@ def test_pipeline_handles_empty_query():
 |-------|-------------|-----|
 | `KeyError: 'shopping'` from Serper | Query returned no shopping results | Add `.get("shopping", [])` — already in template |
 | Price is `None` after parse | Product has no price in Serper response | Filter out in `_parse_serper_response` |
-| Groq rate limit (429) | Free tier limit hit | Fall back to `llama3-8b-8192`, slower but lower limits |
+| Groq rate limit (429) | Free tier limit hit | Fall back to `llama-3.1-8b-instant`, slower but lower limits |
 | Algorand `{"message": "overspend"}` | Testnet account not funded | Fund at testnet.algoexplorer.io/dispenser |
 | SSE connection drops immediately | Missing `Cache-Control: no-cache` header | Add to `StreamingResponse` headers |
 | All scores equal 0.75 | Only one product found — normalization gives all 1.0 | Expected behavior. Add note in UI if < 3 products found |

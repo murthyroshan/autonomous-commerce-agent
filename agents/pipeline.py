@@ -54,7 +54,9 @@ def _parse_user_intent(query: str) -> dict:
     )
     try:
         response = _get_groq_client().chat.completions.create(
-            model="llama3-8b-8192",
+            # llama3-8b-8192 was decommissioned by Groq — use the current
+            # small/fast instant model for intent parsing.
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": query}
@@ -89,6 +91,31 @@ def _run_single_search(sub_query: str, category: str | None = None) -> list[dict
         return []
     sub_state.update(compare_agent(sub_state))
     return sub_state.get("scored_products", [])
+
+
+def _unified_rescore(
+    products: list[dict],
+    user_id: str = "demo",
+    category: str | None = None,
+) -> list[dict]:
+    """
+    Re-run compare_agent over a merged product list so scores share ONE
+    min-max baseline.
+
+    In VS mode each side is searched and scored in its own pool, so the two
+    sides' scores are normalized against different baselines and are not
+    directly comparable. Re-scoring the merged list fixes that. compare_agent
+    reads only the raw fields (price/rating/review_count/source/title), which
+    survive the first scoring pass, so this is safe to run on scored products.
+    """
+    if not products:
+        return []
+    tmp = initial_state("")
+    if category:
+        tmp["category"] = category
+    tmp["search_results"] = products
+    tmp.update(compare_agent(tmp, user_id=user_id))
+    return tmp.get("scored_products", [])
 
 
 def _pin_best_match(sub_query: str, products: list[dict]) -> dict | None:
@@ -250,6 +277,15 @@ def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
                 if p["title"] not in seen and _is_relevant(p["title"], side_a, side_b):
                     seen.add(p["title"])
                     deduped.append(p)
+
+            # Re-score the merged list so both sides' scores share one baseline
+            # (per-pool normalization made them incomparable). Then remap the
+            # pinned contenders to their unified-scored dicts by title.
+            deduped = _unified_rescore(deduped, user_id=user_id, category=unified_category)
+            by_title = {p["title"]: p for p in deduped}
+            contender_a = by_title.get(contender_a["title"], contender_a)
+            contender_b = by_title.get(contender_b["title"], contender_b)
+
             state["search_results"] = deduped
             state["scored_products"] = deduped
             state["battle_contenders"] = [contender_a, contender_b]

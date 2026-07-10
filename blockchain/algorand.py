@@ -390,8 +390,10 @@ def mint_purchase_nft(
     # ASA name — max 32 chars
     asset_name = f"KARTIQ-RECEIPT #{receipt_number:04d}"
 
-    # Unit name — max 8 chars — encodes score
-    score_pct  = round((product.get("score", 0)) * 100)
+    # Unit name — max 8 chars — encodes score.
+    # `score` arrives from the request body where it defaults to None, so
+    # `.get("score", 0)` can still yield None — coerce before arithmetic.
+    score_pct  = round((product.get("score") or 0) * 100)
     unit_name  = f"KR{score_pct:03d}"
 
     # Metadata note — encodes full purchase details

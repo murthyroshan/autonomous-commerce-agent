@@ -173,7 +173,7 @@ This matters because it removes every human-facing authentication primitive from
 | Layer | Technologies |
 |---|---|
 | Backend | Python 3.11, FastAPI, Uvicorn, Pydantic v2, asyncio, slowapi, APScheduler |
-| AI / LLM | Groq API — llama-3.3-70b-versatile, fallback llama3-8b-8192 |
+| AI / LLM | Groq API — llama-3.3-70b-versatile, fallback llama-3.1-8b-instant |
 | Search | Serper.dev Google Shopping API |
 | Blockchain | Algorand Testnet, py-algorand-sdk, PyTeal, AlgoNode RPC |
 | Payments | x402 protocol, USDC ASA 10458941, GoPlausible facilitator |

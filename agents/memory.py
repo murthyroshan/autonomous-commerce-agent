@@ -14,10 +14,17 @@ import logging
 import os
 import re
 import tempfile
+import threading
 from datetime import datetime, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# Serializes read-modify-write cycles on per-user prefs files and the global
+# receipt counter. Agents run under asyncio.to_thread, so concurrent requests
+# execute on real threads — without this, updates race and lose data.
+_prefs_lock   = threading.Lock()
+_receipt_lock = threading.Lock()
 
 def _safe_user_id(user_id: str) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9_\-]", "", user_id)
@@ -61,30 +68,62 @@ def load_prefs(user_id: str) -> dict:
         return dict(_DEFAULT_PREFS)
 
 
-def save_pref(user_id: str, key: str, value) -> None:
-    """
-    Update a single preference key for user_id and write back atomically.
-    Uses a temp-file + rename to avoid partial writes.
-    """
+def _write_prefs(user_id: str, prefs: dict) -> None:
+    """Atomically write the full prefs dict via temp-file + rename. Caller holds _prefs_lock."""
     os.makedirs(PREFS_DIR, exist_ok=True)
-    prefs = load_prefs(user_id)
-    prefs[key] = value
     path = os.path.join(PREFS_DIR, f"{_safe_user_id(user_id)}.json")
-    # Atomic write: write to a temp file in the same directory, then rename
     dir_ = os.path.dirname(os.path.abspath(path))
     fd, tmp_path = tempfile.mkstemp(dir=dir_, suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(prefs, f, indent=2, ensure_ascii=False)
         os.replace(tmp_path, path)
-        logger.debug(f"save_pref({user_id}): saved key='{key}'")
-    except Exception as e:
-        logger.error(f"save_pref({user_id}): write failed — {e}")
+    except Exception:
         try:
             os.unlink(tmp_path)
         except OSError:
             pass
         raise
+
+
+def save_pref(user_id: str, key: str, value) -> None:
+    """
+    Update a single preference key for user_id and write back atomically.
+    Uses a temp-file + rename to avoid partial writes.
+    The load→mutate→write cycle runs under _prefs_lock to avoid lost updates
+    when concurrent requests touch the same user's prefs.
+    """
+    with _prefs_lock:
+        prefs = load_prefs(user_id)
+        prefs[key] = value
+        try:
+            _write_prefs(user_id, prefs)
+            logger.debug(f"save_pref({user_id}): saved key='{key}'")
+        except Exception as e:
+            logger.error(f"save_pref({user_id}): write failed — {e}")
+            raise
+
+
+def add_to_pref_list(user_id: str, key: str, value) -> list:
+    """
+    Append `value` to the list-valued preference `key` for user_id, atomically.
+    Runs the entire load→append→write under _prefs_lock so concurrent rule
+    additions can't clobber each other. Returns the updated list.
+    """
+    with _prefs_lock:
+        prefs = load_prefs(user_id)
+        current = prefs.get(key) or []
+        if not isinstance(current, list):
+            current = [current]
+        if value not in current:
+            current.append(value)
+        prefs[key] = current
+        try:
+            _write_prefs(user_id, prefs)
+        except Exception as e:
+            logger.error(f"add_to_pref_list({user_id}): write failed — {e}")
+            raise
+        return current
 
 
 # ── Rule filtering ────────────────────────────────────────────────────────────
@@ -222,35 +261,46 @@ def get_next_receipt_number(user_id: str = "global") -> int:
     """
     Returns and increments the global receipt counter.
     Stored in prefs/receipt_counter.json.
-    Thread-safe via file read/write with integer lock.
+    The read-modify-write is serialized under _receipt_lock so concurrent
+    confirmations can't mint NFTs with duplicate receipt numbers.
     """
-    import os, json
-    os.makedirs("prefs", exist_ok=True)
-    path = "prefs/receipt_counter.json"
+    os.makedirs(PREFS_DIR, exist_ok=True)
+    path = os.path.join(PREFS_DIR, "receipt_counter.json")
 
-    try:
-        with open(path, "r") as f:
-            data = json.load(f)
-        counter = data.get("counter", 0) + 1
-    except (FileNotFoundError, json.JSONDecodeError):
-        counter = 1
+    with _receipt_lock:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            counter = data.get("counter", 0) + 1
+        except (FileNotFoundError, json.JSONDecodeError):
+            counter = 1
 
-    with open(path, "w") as f:
-        json.dump({"counter": counter}, f)
+        dir_ = os.path.dirname(os.path.abspath(path))
+        fd, tmp_path = tempfile.mkstemp(dir=dir_, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump({"counter": counter}, f)
+            os.replace(tmp_path, path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
     return counter
 
 def log_nft_receipt(user_id: str, nft_data: dict) -> None:
     """Append NFT receipt info to the user's history."""
-    import os, json
-    from datetime import datetime
-
-    os.makedirs("history", exist_ok=True)
-    path = f"history/{user_id}_nfts.jsonl"
+    os.makedirs(HISTORY_DIR, exist_ok=True)
+    # Sanitize user_id: it flows in unvalidated from the request body, and the
+    # /nfts reader also sanitizes — both sides must agree, and an unsanitized
+    # id like "../../x" would otherwise write outside HISTORY_DIR.
+    path = os.path.join(HISTORY_DIR, f"{_safe_user_id(user_id)}_nfts.jsonl")
 
     entry = {
         **nft_data,
-        "timestamp": datetime.utcnow().isoformat() + "Z"
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    with open(path, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")

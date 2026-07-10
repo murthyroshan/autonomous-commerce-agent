@@ -508,20 +508,25 @@ MOCK_PRODUCTS: dict[str, list[dict]] = {
 }
 
 # Keyword → category mapping. Checked in order; first match wins.
-# Checked in order — first match wins.
 # earbuds MUST come before headphones so "wireless earbuds" hits the right category.
+#
+# Form-factor categories that share brand names with phones (tv, tablet, watch)
+# MUST come BEFORE "phone". The phone list matches bare brand names (samsung,
+# oneplus, ...), so "Samsung Galaxy Watch"/"OnePlus Buds"/"Samsung 43-inch TV"
+# would otherwise be misclassified as phones and get phone price-sanity bounds.
+# "phone" is checked last so an explicit form factor always wins over the brand.
 CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "laptop":     ["laptop", "notebook", "macbook", "chromebook", "gaming laptop"],
-    "earbuds":    ["earbud", "tws", "truly wireless", "in-ear", "iem",
+    "earbuds":    ["earbud", "buds", "tws", "truly wireless", "in-ear", "iem",
                    "airpod", "galaxy buds", "neckband", "wireless earphone"],
     "headphones": ["headphone", "headset", "over-ear", "on-ear"],
-    "phone":      ["phone", "mobile", "smartphone", "iphone", "android", "redmi",
-                   "samsung", "oneplus", "realme", "poco", "vivo", "oppo"],
     "tv":         ["tv", "television", "smart tv", "oled", "qled", "monitor"],
     "tablet":     ["tablet", "ipad", "tab ", "kindle"],
+    "watch":      ["watch", "smartwatch", "fitness band", "fitbit", "mi band"],
+    "phone":      ["phone", "mobile", "smartphone", "iphone", "android", "redmi",
+                   "samsung", "oneplus", "realme", "poco", "vivo", "oppo"],
     "speaker":    ["speaker", "bluetooth speaker", "soundbar", "home theatre"],
     "camera":     ["camera", "dslr", "mirrorless", "action cam", "gopro", "webcam"],
-    "watch":      ["watch", "smartwatch", "fitness band", "fitbit", "mi band"],
     "keyboard":   ["keyboard", "mechanical keyboard"],
     "mouse":      ["mouse", "gaming mouse", "trackpad"],
 }

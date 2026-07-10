@@ -34,6 +34,11 @@ _groq_client = None  # lazily created on first use
 _CACHE_TTL_SECONDS = 3600  # 1 hour
 _search_cache: dict[str, tuple[float, dict]] = {}
 
+# Error string set when both live tiers fail and we fall back to sample data.
+# Results carrying this must NOT be cached, otherwise a transient API outage
+# pins sample data for the full TTL even after the live tiers recover.
+_DEGRADED_ERROR = "Live search unavailable — showing sample data"
+
 # ── Supplemental search call counter (for monitoring) ────────────────────────
 _supplemental_search_count = 0
 
@@ -103,16 +108,22 @@ def _extract_budget(query: str) -> float | None:
             val *= 1000
         return val
 
-    # Pattern 2: explicit keyword + number
-    explicit = re.search(
+    # Pattern 2: explicit keyword + number.
+    # We scan ALL matches (not just the first) and skip tiny values: the bare
+    # word "for" plus a spec/count produces false budgets like "phone for 5g"
+    # (→ 5) or "mouse for 2 players" (→ 2). Any number below ₹100 is never a
+    # real product budget in this catalogue (cheapest floor ~₹150), so it is
+    # treated as a spec/count and skipped — while "mouse under 500" still works.
+    explicit_pattern = (
         r'(?:under|below|less\s+than|within|upto|up\s+to|around|'
-        r'for|budget\s+of|<|₹|rs\.?|inr)\s*₹?\s*([\d,]+)\s*(k|thousand)?',
-        q,
+        r'for|budget\s+of|<|₹|rs\.?|inr)\s*₹?\s*([\d,]+)\s*(k|thousand)?'
     )
-    if explicit:
+    for explicit in re.finditer(explicit_pattern, q):
         val = float(explicit.group(1).replace(',', ''))
         if explicit.group(2) in ('k', 'thousand'):
             val *= 1000
+        if val < 100:
+            continue  # spec/count, not a budget (e.g. "for 5g", "for 2")
         if 'around' in q:
             val *= 1.10
         return val
@@ -769,7 +780,7 @@ def _call_serper(
     max_price: float | None = None,
     category: str = "default",
 ) -> list[dict]:
-    """Call Serper.dev Google Shopping API. Retries up to 3 times."""
+    """Call Serper.dev Google Shopping API. Retries up to 2 attempts (see decorator)."""
     import re
     query = re.sub(r"[\x00-\x1f\x7f]", "", query)[:300]
     # Pass category so the query gets the right noun injected (e.g. 'smartphone')
@@ -1024,10 +1035,12 @@ def search_agent(state: AgentState) -> dict:
     if results:
         out: dict = {"search_results": results}
         if used_mock:
-            out["error"] = "Live search unavailable — showing sample data"
+            out["error"] = _DEGRADED_ERROR
         elif len(results) < 3:
             out["error"] = f"Limited results for this budget — showing {len(results)} product(s)"
-        _cache_set(cache_key, out)
+        # Don't cache degraded (mock-fallback) results — let recovery take effect.
+        if not used_mock:
+            _cache_set(cache_key, out)
         return out
 
     # ── Smart Budget Negotiation (Feature 2) ────────────────────────────────
@@ -1070,13 +1083,13 @@ def search_agent(state: AgentState) -> dict:
             return result
 
     # ── Absolute fallback: return whatever mock data we have ────────────────
+    # Not cached: this is the degraded path, and caching it would block the
+    # live tiers from taking over once they recover (within the 1h TTL).
     logger.info(f"Using mock data for query: '{query}'")
     mock_results = get_mock_products(query)
     if budget:
         mock_results = [p for p in mock_results if p["price"] <= budget]
-    result = {
+    return {
         "search_results": mock_results,
-        "error": "Live search unavailable — showing sample data",
+        "error": _DEGRADED_ERROR,
     }
-    _cache_set(cache_key, result)
-    return result

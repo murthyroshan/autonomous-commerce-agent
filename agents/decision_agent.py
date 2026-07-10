@@ -2,7 +2,7 @@
 agents/decision_agent.py — pick the top product and generate AI justification.
 
 Uses Groq API (free tier) with llama-3.3-70b-versatile.
-Falls back to llama3-8b-8192 if rate-limited.
+Falls back to llama-3.1-8b-instant if rate-limited.
 Falls back to a static template if both models fail.
 """
 
@@ -25,7 +25,9 @@ def _get_groq_client():
     return groq_client
 
 PRIMARY_MODEL  = "llama-3.3-70b-versatile"
-FALLBACK_MODEL = "llama3-8b-8192"
+# llama3-8b-8192 was decommissioned by Groq; llama-3.1-8b-instant is the
+# current small/fast replacement used for the rate-limit fallback.
+FALLBACK_MODEL = "llama-3.1-8b-instant"
 
 
 def _build_prompt(product: dict, all_products: list[dict]) -> str:
@@ -107,10 +109,22 @@ def _build_prompt(product: dict, all_products: list[dict]) -> str:
 
 def _static_justification(product: dict) -> str:
     """Fallback justification when Groq is unavailable."""
+    # Prefer the confidence-adjusted rating; fall back to raw. When no rating
+    # data exists at all, avoid the odd "0.0★ from 0 reviews" phrasing.
+    rating = product.get("_adj_rating") or product.get("rating") or 0
+    review_count = product.get("review_count", 0) or 0
+    if rating and review_count:
+        rating_clause = (
+            f"combining a strong {rating:.1f}★ rating from {review_count:,} "
+            f"verified buyers with competitive pricing. "
+        )
+    else:
+        rating_clause = (
+            "backed by competitive pricing (community rating data was unavailable). "
+        )
     return (
         f"The {product['title']} offers the best overall value at ₹{product['price']:,.0f}, "
-        f"combining a strong {product['rating']}★ rating from {product['review_count']:,} "
-        f"verified buyers with competitive pricing. "
+        f"{rating_clause}"
         f"Its combination of price efficiency and user satisfaction makes it the top pick."
     )
 

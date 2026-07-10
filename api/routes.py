@@ -111,7 +111,7 @@ async def search_stream(request: Request, query: str, user_id: str = Query(defau
             return f"data: {json.dumps(data)}\n\n"
 
         try:
-            from agents.pipeline import _detect_vs_query, _run_single_search, _pin_best_match, _is_relevant, _match_side
+            from agents.pipeline import _detect_vs_query, _run_single_search, _pin_best_match, _is_relevant, _match_side, _unified_rescore
             is_vs, side_a, side_b = _detect_vs_query(query.strip())
             state = initial_state(query.strip())
 
@@ -180,6 +180,13 @@ async def search_stream(request: Request, query: str, user_id: str = Query(defau
                     if p["title"] not in seen and _is_relevant(p["title"], side_a, side_b):
                         seen.add(p["title"])
                         deduped.append(p)
+
+                # Re-score the merged list so both sides share one baseline, then
+                # remap the pinned contenders to their unified-scored dicts.
+                deduped = await asyncio.to_thread(_unified_rescore, deduped, user_id)
+                by_title = {p["title"]: p for p in deduped}
+                contender_a = by_title.get(contender_a["title"], contender_a)
+                contender_b = by_title.get(contender_b["title"], contender_b)
 
                 state["search_results"] = deduped
                 state["scored_products"] = deduped
@@ -656,12 +663,11 @@ async def add_preference_rule(request: Request, req: RuleRequest):
     value  = parsed["value"]
 
     try:
-        prefs = await asyncio.to_thread(load_prefs, req.user_id)
         if action == "append":
-            current: list = prefs.get(key, [])
-            if value not in current:
-                current.append(value)
-            await asyncio.to_thread(save_pref, req.user_id, key, current)
+            # Single atomic load→append→write under a lock — avoids the
+            # lost-update race of a separate load_prefs + save_pref round-trip.
+            from agents.memory import add_to_pref_list
+            current = await asyncio.to_thread(add_to_pref_list, req.user_id, key, value)
             interpreted = {key: current}
         else:  # "set"
             await asyncio.to_thread(save_pref, req.user_id, key, value)
