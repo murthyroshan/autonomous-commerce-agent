@@ -233,9 +233,12 @@ def decision_agent(state: AgentState) -> dict:
     top = scored[0]
     prompt = _build_prompt(top, scored)
 
-    # Social Proof: Community Sentiment
-    community_sentiment = _get_community_sentiment(top["title"])
-    
+    # Community sentiment is intentionally NOT fetched here — it costs an extra
+    # Serper search + Groq summarization and would block the search response.
+    # The frontend fetches it lazily via GET /api/community-sentiment after the
+    # winner renders (see _get_community_sentiment / the route).
+    community_sentiment = None
+
     # Try primary model for standard justification
     try:
         justification = _call_groq(prompt, PRIMARY_MODEL)

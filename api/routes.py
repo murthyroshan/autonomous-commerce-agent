@@ -782,6 +782,26 @@ async def social_proof_endpoint(
         }
 
 
+# ── GET /community-sentiment — one-line AI community verdict ───────────────────
+# Fetched lazily by the frontend after the winner renders, so the extra Serper
+# search + Groq summarization it performs stays off the search critical path.
+
+@router.get("/community-sentiment")
+@_rate_limit("30/minute")
+async def community_sentiment_endpoint(
+    request: Request,
+    title: str = Query(..., max_length=500),
+):
+    """Return a single-sentence community-consensus summary for a product title."""
+    from agents.decision_agent import _get_community_sentiment
+    try:
+        sentiment = await asyncio.to_thread(_get_community_sentiment, title)
+        return {"community_sentiment": sentiment}
+    except Exception as e:
+        logger.error(f"community_sentiment error: {e}")
+        return {"community_sentiment": None}
+
+
 # ── Conversational endpoints (Part D) ─────────────────────────────────────────
 
 class ClarifyRequest(BaseModel):
