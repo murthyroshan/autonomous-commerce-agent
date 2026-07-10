@@ -135,7 +135,7 @@ export function ProductCard({
         setEscrowActionError(data.error || 'Delivery confirmation failed')
         setEscrowAction('error')
       }
-    } catch (e) {
+    } catch {
       setEscrowActionError('Network error')
       setEscrowAction('error')
     }
@@ -157,7 +157,7 @@ export function ProductCard({
         setEscrowActionError(data.error || 'Refund failed')
         setEscrowAction('error')
       }
-    } catch (e) {
+    } catch {
       setEscrowActionError('Network error')
       setEscrowAction('error')
     }

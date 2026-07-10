@@ -3,7 +3,6 @@ import { useState, useCallback } from 'react'
 type CursorVariant = 'default' | 'magnetic' | 'hover' | 'search'
 
 let _variant: CursorVariant = 'default'
-let _listeners: Array<() => void> = []
 
 export function useGlobalState() {
   const [cursorVariant, setCursorVariantState] = useState<CursorVariant>(_variant)

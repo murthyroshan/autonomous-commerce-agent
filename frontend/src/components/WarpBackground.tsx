@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useMemo, useState, useEffect } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { PointMaterial, Points } from '@react-three/drei'
 import * as THREE from 'three'

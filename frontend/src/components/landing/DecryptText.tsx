@@ -18,9 +18,7 @@ export function DecryptText({
   const [displayText, setDisplayText] = useState('');
 
   useEffect(() => {
-    let timeout: NodeJS.Timeout;
-    
-    timeout = setTimeout(() => {
+    const timeout = setTimeout(() => {
       let iteration = 0;
       const interval = setInterval(() => {
         setDisplayText(() => 

@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from 'recharts'
-import { AlertCircle, Sparkles, Target } from 'lucide-react'
+import { AlertCircle, Sparkles } from 'lucide-react'
 
 interface ExplainDrawerProps {
   product: any

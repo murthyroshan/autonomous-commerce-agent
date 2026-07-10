@@ -5,7 +5,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { Sphere, Line, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 
-function AgentNode({ position, color, label }: { position: [number, number, number], color: string, label: string }) {
+function AgentNode({ position, color }: { position: [number, number, number], color: string, label?: string }) {
   const meshRef = useRef<THREE.Mesh>(null);
   
   useFrame((state) => {

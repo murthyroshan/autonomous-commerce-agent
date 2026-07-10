@@ -1,5 +1,4 @@
 'use client';
-import { useEffect, useState } from 'react';
 
 const HASHES = [
   "TX: 8fA2...391a — 1 mALGO",
