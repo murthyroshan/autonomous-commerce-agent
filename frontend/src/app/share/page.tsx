@@ -193,7 +193,7 @@ export default function SharePage() {
               KartIQ picked · {sharedDate}
             </p>
             <p className="text-[12px] text-zinc-400 truncate">
-              "<span className="text-zinc-200">{data!.query}</span>"
+              &ldquo;<span className="text-zinc-200">{data!.query}</span>&rdquo;
             </p>
           </div>
           <ScoreArc score={score} />

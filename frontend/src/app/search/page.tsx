@@ -220,7 +220,7 @@ function SearchContent() {
             <div>
               <h2 className="text-xl font-bold">Results</h2>
               <p className="text-sm text-zinc-400">
-                Compared {result.recommendation?.total_compared ?? result.scored_products?.length ?? 0} products for "{query}"
+                Compared {result.recommendation?.total_compared ?? result.scored_products?.length ?? 0} products for &ldquo;{query}&rdquo;
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -269,7 +269,7 @@ function SearchContent() {
       {result?.scored_products && result.scored_products.length === 0 && !loading && (
         <section id="results-section" className="flex-1 px-4 pb-20 pt-20 max-w-7xl mx-auto w-full text-center">
            <p className="text-2xl font-bold mb-3 font-display">No products found</p>
-           <p className="text-zinc-400 mb-8 max-w-md mx-auto">We couldn't find any products matching your query. Try broadening your search or checking for typos.</p>
+           <p className="text-zinc-400 mb-8 max-w-md mx-auto">We couldn&apos;t find any products matching your query. Try broadening your search or checking for typos.</p>
            <button onClick={() => setQuery(null)} className="px-6 py-3 bg-purple-600 rounded-xl font-bold hover:bg-purple-500 transition-colors">
               Try another search
            </button>
