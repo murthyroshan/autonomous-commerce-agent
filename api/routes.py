@@ -9,12 +9,10 @@ import re
 from fastapi import APIRouter, HTTPException, Query, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from typing import Optional
 
 try:
     from slowapi import Limiter
     from slowapi.util import get_remote_address
-    from slowapi.errors import RateLimitExceeded
     _limiter = Limiter(key_func=get_remote_address)
     _RATE_LIMIT = "15/minute"
     _rate_limiting_available = True
@@ -30,7 +28,7 @@ from agents.state import initial_state
 from agents.search_agent import search_agent
 from agents.compare_agent import compare_agent
 from agents.decision_agent import decision_agent
-from agents.memory import load_prefs, save_pref, log_purchase, get_history
+from agents.memory import save_pref, log_purchase, get_history
 from agents.watchlist import _safe_user_id
 from .models import SearchRequest, SearchResponse, ConfirmRequest, ConfirmResponse
 
@@ -377,8 +375,6 @@ async def prepare_transaction(request: Request, req: ConfirmRequest):
             "error": "Wallet signing unavailable — use direct confirm",
         }
 
-
-from fastapi import BackgroundTasks
 
 @router.post("/confirm/submit")
 @_rate_limit("10/minute")

@@ -147,7 +147,7 @@ def _pin_best_match(sub_query: str, products: list[dict]) -> dict | None:
         
         # Massive boost if the exact string appears (e.g. 'oneplus 12' in 'OnePlus 12 5G...')
         # Use regex word boundaries so "oneplus 12" doesn't falsely match inside "oneplus 12R"
-        import re
+        # (module-level `re` is already imported at the top of the file)
         if re.search(rf'\b{re.escape(sub_query.lower())}\b', product["title"].lower()):
             combined += 1.0
 
@@ -260,10 +260,10 @@ def run_pipeline(query: str, user_id: str = "demo") -> AgentState:
             return {**state, "error": f"Could not find exact matches for '{side_a}' or '{side_b}'"}
         elif contender_a and not contender_b:
             # Only one side found — fall back to standard mode
-            logger.warning(f"VS: only side A found products. Falling back to standard.")
+            logger.warning("VS: only side A found products. Falling back to standard.")
             state["search_results"] = [p for p in results_a if _match_side(p["title"], side_a)]
         elif contender_b and not contender_a:
-            logger.warning(f"VS: only side B found products. Falling back to standard.")
+            logger.warning("VS: only side B found products. Falling back to standard.")
             state["search_results"] = [p for p in results_b if _match_side(p["title"], side_b)]
         else:
             # Both sides found — merge, deduplicate, sort

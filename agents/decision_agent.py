@@ -7,7 +7,7 @@ Falls back to a static template if both models fail.
 """
 
 import logging
-from groq import Groq, RateLimitError, APIError
+from groq import RateLimitError, APIError
 
 from .state import AgentState
 
@@ -170,7 +170,7 @@ def _build_battle_prompt(a: dict, b: dict) -> str:
 
 def _get_community_sentiment(product_title: str) -> str | None:
     """Search trusted community sites via Serper and summarize with Groq."""
-    import os, requests, json
+    import os, requests
     api_key = os.getenv("SERPER_API_KEY")
     if not api_key:
         return None
@@ -267,7 +267,6 @@ def decision_agent(state: AgentState) -> dict:
             # Build a static fallback battle report
             a, b = contenders[0], contenders[1]
             winner = a if a.get("score", 0) >= b.get("score", 0) else b
-            loser = b if winner is a else a
             battle_report = (
                 f"Both products are strong contenders in their own right. "
                 f"The {a['title']} leads on price at ₹{a['price']:,.0f} while "
