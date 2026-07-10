@@ -267,9 +267,11 @@ async def search_stream(request: Request, query: str, user_id: str = Query(defau
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control":               "no-cache",
-            "X-Accel-Buffering":           "no",
-            "Access-Control-Allow-Origin": os.getenv("FRONTEND_ORIGIN", "http://localhost:3000"),
+            "Cache-Control":     "no-cache",
+            "X-Accel-Buffering": "no",
+            # NOTE: Access-Control-Allow-Origin is added by CORSMiddleware
+            # (api/main.py). Setting it here too produced a duplicate ACAO
+            # header, which browsers reject under allow_credentials.
         },
     )
 
