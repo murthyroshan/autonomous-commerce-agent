@@ -13,6 +13,9 @@ interface ChatFlowProps {
 
 type FlowState = 'IDLE' | 'CLARIFYING' | 'SEARCHING'
 
+// "A vs B" / "A versus B" — a comparison naming two specific products.
+const VS_PATTERN = /\s+(?:vs\.?|versus)\s+/i
+
 async function fetchJsonWithTimeout(
   input: RequestInfo | URL,
   init: RequestInit,
@@ -73,7 +76,14 @@ export function ChatFlow({ onSearch, disabled, initialQuery }: ChatFlowProps) {
   async function triggerClarify(q: string) {
     const qClean = q.trim()
     if (!qClean || disabled) return
-    
+
+    // Comparison queries already name two specific products — skip the clarify
+    // step entirely (VS/battle mode ignores budget/feature/OS answers anyway).
+    if (VS_PATTERN.test(qClean)) {
+      triggerFinalSearch(qClean)
+      return
+    }
+
     setIsClarifyingLoading(true)
     setQuestions([])
     setAnswers({})

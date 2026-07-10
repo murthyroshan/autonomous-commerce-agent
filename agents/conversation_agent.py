@@ -13,6 +13,9 @@ from groq import Groq
 
 logger = logging.getLogger(__name__)
 
+# "A vs B" / "A versus B" — a comparison naming two specific products.
+_VS_RE = re.compile(r"\s+(?:vs\.?|versus)\s+", re.IGNORECASE)
+
 # Cache for the groq client so we don't recreate it every time
 _groq_client = None
 
@@ -31,6 +34,10 @@ def needs_clarification(query: str) -> bool:
     Returns False in mock mode or on API error (fail open).
     """
     if os.getenv("MOCK_ONLY", "false").lower() == "true":
+        return False
+
+    # Comparison queries ("A vs B") name specific products — never clarify.
+    if _VS_RE.search(query):
         return False
 
     try:
