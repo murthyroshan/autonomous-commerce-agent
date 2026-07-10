@@ -13,10 +13,11 @@ env/
 dist/
 build/
 
-# User data (never commit these)
-prefs/
-history/
-watchlist/
+# User data (never commit these) — anchored to repo root so they don't also
+# ignore frontend route dirs like frontend/src/app/history and .../watchlist.
+/prefs/
+/history/
+/watchlist/
 
 # Testing
 .pytest_cache/
@@ -55,7 +56,7 @@ Thumbs.db
 
 # Logs
 *.log
-logs/
+/logs/
 
 # Algorand compiled contract artifacts
 blockchain/compiled/
