@@ -84,6 +84,10 @@ export default function SharePage() {
   useEffect(() => {
     if (locked.current) return
     locked.current = true
+    // One-time client-side decode of the ?d= param after hydration. Doing this
+    // during render (e.g. a lazy useState initializer) would read window and
+    // cause a hydration mismatch, so the state is set here intentionally.
+    /* eslint-disable react-hooks/set-state-in-effect */
     try {
       const params = new URLSearchParams(window.location.search)
       const encoded = params.get('d')
@@ -92,6 +96,7 @@ export default function SharePage() {
       if (!data || !data.winner) { setState({ status: 'error' }); return }
       setState({ status: 'ok', data })
     } catch { setState({ status: 'error' }) }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [])
 
   if (state.status === 'loading') {
@@ -131,10 +136,14 @@ export default function SharePage() {
   const score = Math.round((winner.score ?? 0) * 100)
   const badge = sourceBadge(winner.source || '')
   const scoreColor = score >= 75 ? '#00d4aa' : score >= 50 ? '#f59e0b' : '#ef4444'
-  let sharedDate = ''
-  try {
-    sharedDate = new Date(data!.timestamp || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-  } catch { sharedDate = 'Recently' }
+  // Avoid an impure Date.now() during render: show the shared timestamp when
+  // present, otherwise a neutral label.
+  let sharedDate = 'Recently'
+  if (data!.timestamp) {
+    try {
+      sharedDate = new Date(data!.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    } catch { sharedDate = 'Recently' }
+  }
 
   return (
     <div className="min-h-screen bg-[#080808] flex flex-col items-center justify-center px-4 py-12 overflow-hidden relative">

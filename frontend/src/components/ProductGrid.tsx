@@ -45,10 +45,13 @@ export function ProductGrid({ products, recommendation, loading = false }: Produ
     if (!winnerTitle) return
     // If the payload already carried it (older backend), don't refetch.
     if (recommendation?.community_sentiment) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSentiment(recommendation.community_sentiment)
       return
     }
     let active = true
+    // Intentional reset: clear the previous winner's sentiment before the new
+    // fetch resolves, so stale text isn't shown during the request.
     setSentiment(null)
     const params = new URLSearchParams({ title: winnerTitle })
     fetch(`${API}/api/community-sentiment?${params}`)

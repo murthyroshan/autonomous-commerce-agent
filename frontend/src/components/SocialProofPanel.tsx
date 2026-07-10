@@ -57,6 +57,9 @@ export function SocialProofPanel({ title, query = '' }: Props) {
 
   useEffect(() => {
     if (!title) return
+    // Intentional reset: show the loading state again when the product changes
+    // before the new fetch resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     const params = new URLSearchParams({ title, query })
     fetch(`${API}/api/social-proof?${params}`)

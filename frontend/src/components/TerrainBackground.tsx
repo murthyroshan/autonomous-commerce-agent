@@ -48,6 +48,9 @@ function Terrain() {
             
         positionAttribute.setZ(i, z)
     }
+    // Three.js requires mutating the geometry attribute in-place inside useFrame;
+    // this is the intended API, not a React state mutation.
+    // eslint-disable-next-line react-hooks/immutability
     positionAttribute.needsUpdate = true
     
     // Removed the physical Y position jump since the math creates infinite scrolling!

@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { motion, useMotionValue, useSpring } from 'framer-motion'
+import { useMounted } from '@/hooks/useMounted'
 
 export function CustomCursor() {
-  const [mounted, setMounted] = useState(false)
+  const mounted = useMounted()
   const [clicking, setClicking] = useState(false)
   const [hovering, setHovering] = useState(false)
 
@@ -21,7 +22,6 @@ export function CustomCursor() {
   const trailY = useSpring(cursorY, { stiffness: 200, damping: 25, mass: 0.5 })
 
   useEffect(() => {
-    setMounted(true)
     const move = (e: MouseEvent) => {
       cursorX.set(e.clientX)
       cursorY.set(e.clientY)

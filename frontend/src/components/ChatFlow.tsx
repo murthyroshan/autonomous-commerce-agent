@@ -60,6 +60,9 @@ export function ChatFlow({ onSearch, disabled, initialQuery }: ChatFlowProps) {
       setQuery(initialQuery)
       triggerClarify(initialQuery)
     }
+    // Run only when initialQuery arrives; triggerClarify is intentionally
+    // excluded (it isn't memoized and would re-fire the clarify flow).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery])
 
   async function handleInitialSearch(e: React.FormEvent) {

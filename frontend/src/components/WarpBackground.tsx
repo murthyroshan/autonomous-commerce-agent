@@ -1,9 +1,10 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { PointMaterial, Points } from '@react-three/drei'
 import * as THREE from 'three'
+import { useMounted } from '@/hooks/useMounted'
 
 function Stars({ isWarping }: { isWarping: boolean }) {
   const ref = useRef<THREE.Points>(null)
@@ -62,8 +63,7 @@ function Stars({ isWarping }: { isWarping: boolean }) {
 }
 
 export function WarpBackground({ isWarping = false }: { isWarping?: boolean }) {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
+  const mounted = useMounted()
   if (!mounted) return null
 
   return (

@@ -29,19 +29,20 @@ const ProductGrid = dynamic(
 function SearchContent() {
   const [query, setQuery] = useState<string | null>(null)
 
-  const [initialQ, setInitialQ] = useState<string>('')
-
+  // Derive the initial query straight from the URL — no effect/state needed.
   const searchParams = useSearchParams()
-  useEffect(() => {
-      const q = searchParams.get('q')
-      if (q) setInitialQ(q)
-  }, [searchParams])
+  const initialQ = searchParams.get('q') ?? ''
 
   const { status, result, loading, streamError } = useAgentStream(query)
   const [dismissedBudgetMiss, setDismissedBudgetMiss] = useState(false)
 
-  // Reset dismissed state whenever a new query fires
-  useEffect(() => { setDismissedBudgetMiss(false) }, [query])
+  // Reset dismissed state whenever a new query fires (adjust-state-on-change
+  // during render, tracking the previous query in state).
+  const [prevQuery, setPrevQuery] = useState(query)
+  if (query !== prevQuery) {
+    setPrevQuery(query)
+    setDismissedBudgetMiss(false)
+  }
 
   // Scroll to results when they arrive
   useEffect(() => {

@@ -65,9 +65,11 @@ const CHARS = '!@#$%^&*()_+-=[]{}|;:,.<>/?1234567890abcdefghijklmnopqrstuvwxyzAB
 function ScrambleText({ text, isHovered }: { text: string; isHovered: boolean }) {
   const [displayText, setDisplayText] = useState(text)
 
-  const prevHovered = useRef(isHovered)
-  if (isHovered !== prevHovered.current) {
-    prevHovered.current = isHovered
+  // Adjust state during render when the prop changes (React-docs pattern),
+  // tracking the previous value in state rather than a ref.
+  const [prevHovered, setPrevHovered] = useState(isHovered)
+  if (isHovered !== prevHovered) {
+    setPrevHovered(isHovered)
     if (!isHovered) {
       setDisplayText(text)
     }

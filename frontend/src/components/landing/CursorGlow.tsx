@@ -23,7 +23,7 @@ export function CursorGlow() {
 
     window.addEventListener('mousemove', moveCursor, { passive: true });
     return () => window.removeEventListener('mousemove', moveCursor);
-  }, []);
+  }, [cursorX, cursorY]);
 
   return (
     <motion.div

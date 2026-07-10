@@ -23,6 +23,9 @@ function useTypewriter(text: string | null, speed = 18): string {
   const textRef = useRef(text)
 
   useEffect(() => {
+    // Typewriter reset: clearing the displayed text when `text` changes is the
+    // intended start-of-animation reset, not a cascading render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!text) { setDisplayed(''); return }
     if (textRef.current !== text) {
       textRef.current = text
