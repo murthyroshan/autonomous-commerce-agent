@@ -10,7 +10,9 @@ export function useCyberAudio() {
   // Initialize the audio context
   const initAudio = () => {
     if (!audioCtxMain.current) {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioContext =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof window.AudioContext }).webkitAudioContext;
       audioCtxMain.current = new AudioContext();
     }
     

@@ -1,11 +1,15 @@
 'use client'
 import { useState }      from 'react'
 import { motion }        from 'framer-motion'
+import type { ScoredProduct } from '@/hooks/useAgentStream'
 import { buildShareUrl, copyToClipboard } from '@/lib/share'
 
 interface ShareButtonProps {
   query:         string
-  recommendation: any
+  // A scored product plus the (winner-only) justification; both call sites pass
+  // either a Recommendation or a scored product spread with justification.
+  // community_sentiment may ride along (unused here) from the winner card.
+  recommendation: ScoredProduct & { justification?: string; community_sentiment?: string }
   totalCompared: number
 }
 

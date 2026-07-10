@@ -1,6 +1,14 @@
 'use client';
 
-export function StaticProductCard({ item }: { item: any }) {
+interface MarqueeItem {
+  title:    string;
+  source:   string;
+  price:    string | number;
+  rating:   string | number;
+  hotDeal?: boolean;
+}
+
+export function StaticProductCard({ item }: { item: MarqueeItem }) {
   return (
     <div className="w-[340px] h-[180px] flex-shrink-0 mx-4 my-2 relative bg-black/90 border border-violet-500/20 rounded-2xl p-5 flex flex-col justify-between overflow-hidden">
         {/* Minimal flat representation without heavy 3D or expensive nested filters/shadows */}

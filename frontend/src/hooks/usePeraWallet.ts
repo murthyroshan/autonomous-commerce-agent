@@ -130,9 +130,9 @@ export function usePeraWallet() {
       const signedTxns = await peraWallet.signTransaction([[{ txn, signers: [signerAddress] }]])
       // Convert Uint8Array directly to a numbered array to bypass all Base64 translation errors
       return Array.from(signedTxns[0])
-    } catch (e: any) {
+    } catch (e) {
       console.warn('Pera signing failed:', e)
-      const msg = e?.message?.toLowerCase() || ''
+      const msg = (e instanceof Error ? e.message : String(e)).toLowerCase()
       if (msg.includes('user rejected') || msg.includes('cancelled') || msg.includes('declined')) {
         return null // Silently cancel
       }

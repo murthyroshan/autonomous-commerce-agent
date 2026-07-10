@@ -1,7 +1,18 @@
 'use client';
 import { useState } from 'react';
 
-export function FlippingProductCard({ item }: { item: any }) {
+interface MarqueeItem {
+  title:      string;
+  source:     string;
+  price:      string | number;
+  rating:     string | number;
+  hotDeal?:   boolean;
+  priceScore?: string | number;
+  trustTier?: string;
+  verdict?:   string;
+}
+
+export function FlippingProductCard({ item }: { item: MarqueeItem }) {
   const [flipped, setFlipped] = useState(false);
 
   return (

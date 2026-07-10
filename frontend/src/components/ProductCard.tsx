@@ -34,7 +34,7 @@ interface ProductCardProps {
   index?: number
   justification?: string
   communitySentiment?: string
-  allProducts?: any[]
+  allProducts?: ScoredProduct[]
 }
 
 function sourceBadge(source: string) {
@@ -241,8 +241,8 @@ export function ProductCard({
         if (data.error) setConfirmError(data.error)
         setConfirmState('error')
       }
-    } catch (e: any) {
-      setConfirmError(e.message || 'Network error')
+    } catch (e) {
+      setConfirmError(e instanceof Error ? e.message : 'Network error')
       setConfirmState('error')
     }
   }

@@ -12,9 +12,27 @@ import {
 } from 'recharts'
 import { AlertCircle, Sparkles } from 'lucide-react'
 
+// Loosely-typed product shape: ExplainDrawer reads scoring/trust fields that
+// aren't all on the base ScoredProduct, so they're modelled as optional here.
+interface ProductLike {
+  title: string
+  price: number
+  rating?: number
+  review_count?: number
+  score_breakdown?: {
+    price_score?: number
+    rating_score?: number
+    review_score?: number
+  }
+  relevance_score?: number
+  trust_multiplier?: number
+  trust_tier?: string
+  price_suspicious?: boolean
+}
+
 interface ExplainDrawerProps {
-  product: any
-  allProducts: any[]
+  product: ProductLike
+  allProducts: ProductLike[]
   isWinner?: boolean
   open: boolean
   onClose: () => void
@@ -25,7 +43,7 @@ interface LoserReason {
   stats: string[];
 }
 
-function getLosingReason(loser: any, winner: any): LoserReason {
+function getLosingReason(loser: ProductLike, winner: ProductLike): LoserReason {
   const priceDiff = loser.price - winner.price
   const ratingDiff = (loser.rating ?? 0) - (winner.rating ?? 0)
   const reviewDiff = (loser.review_count ?? 0) - (winner.review_count ?? 0)
