@@ -46,9 +46,10 @@ function getLosingReason(loser: any, winner: any): LoserReason {
 }
 
 export function ExplainDrawer({ product, allProducts, isWinner = false, open, onClose }: ExplainDrawerProps) {
-  if (!open || !product || !allProducts) return null
-
+  // Hooks must run unconditionally — keep useState above any early return.
   const [activeTab, setActiveTab] = useState<'overview' | 'competitors'>('overview')
+
+  if (!open || !product || !allProducts) return null
 
   const validProducts = allProducts.filter(p => p.score_breakdown)
   const avgScores = {
